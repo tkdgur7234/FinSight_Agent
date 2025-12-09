@@ -1,0 +1,158 @@
+{
+  "name": "StockSense",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -480,
+        16
+      ],
+      "id": "f6a225f3-c4da-46ac-8036-4aa0b7d751de",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "url": "https://api.apiflash.com/v1/urltoimage",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "access_key",
+              "value": "7c895cc29c9a4264bf1a8c8397affc34"
+            },
+            {
+              "name": "url",
+              "value": "https://finviz.com/map.ashx?t=sec"
+            },
+            {
+              "name": "fomat",
+              "value": "png"
+            },
+            {
+              "name": "quality",
+              "value": "100"
+            },
+            {
+              "name": "width",
+              "value": "1920"
+            },
+            {
+              "name": "height",
+              "value": "1080"
+            },
+            {
+              "name": "response_type",
+              "value": "image"
+            },
+            {
+              "name": "element",
+              "value": "#canvas-wrapper"
+            },
+            {
+              "name": "wait_until",
+              "value": "page_loaded"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -272,
+        16
+      ],
+      "id": "25739b7b-ae5f-4ee2-aa46-65aa79996f08",
+      "name": "s&p 500 map"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. 설정\nconst tickers = {\n  \"다우 존스\": \"^DJI\",\n  \"S&P 500\": \"^GSPC\",\n  \"나스닥\": \"^IXIC\",\n  \"러셀 2000\": \"^RUT\",\n  \"WTI 원유\": \"CL=F\",\n  \"금\": \"GC=F\",\n  \"비트코인\": \"BTC-USD\",\n  \"미 국채 10년\": \"^TNX\",\n  \"달러 인덱스\": \"DX-Y.NYB\"\n};\n\nconst results = [];\nconst requests = [];\n\n// 2. 비동기 요청 준비 (병렬 처리로 속도 최적화)\nfor (const [name, symbol] of Object.entries(tickers)) {\n  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=2d`;\n  \n  // n8n 내장 HTTP Helper 사용\n  const requestPromise = this.helpers.httpRequest({\n    method: 'GET',\n    url: url,\n    headers: {\n      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'\n    },\n    json: true\n  })\n  .then(response => {\n    // 성공 시 데이터 파싱\n    const meta = response.chart.result[0].meta;\n    const currentPrice = meta.regularMarketPrice;\n    const prevClose = meta.chartPreviousClose;\n\n    const changeAmount = currentPrice - prevClose;\n    const changePct = (changeAmount / prevClose) * 100;\n\n    const emoji = changePct >= 0 ? \"🔴\" : \"🔵\";\n    const sign = changePct >= 0 ? \"+\" : \"\";\n\n    // 포맷팅\n    let priceStr = \"\";\n    if ([\"^TNX\", \"DX-Y.NYB\"].includes(symbol)) {\n      priceStr = currentPrice.toFixed(3);\n    } else if (symbol === \"BTC-USD\") {\n      priceStr = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(currentPrice);\n    } else {\n      priceStr = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(currentPrice);\n    }\n\n    return `| ${name} | ${priceStr} | ${emoji} ${sign}${changePct.toFixed(2)}% |`;\n  })\n  .catch(error => {\n    // 실패 시 에러 로그 반환\n    return `| ${name} | Error | ⚠️ ${error.message} |`;\n  });\n\n  requests.push(requestPromise);\n}\n\n// 3. 모든 요청 병렬 실행 및 대기\nconst rows = await Promise.all(requests);\n\n// 4. 테이블 생성\nlet markdownTable = \"| 지표 | 현재가 | 변동률 |\\n| :--- | :---: | :---: |\\n\";\nmarkdownTable += rows.join(\"\\n\");\n\nreturn [\n  {\n    json: {\n      market_summary_markdown: markdownTable\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -272,
+        -128
+      ],
+      "id": "fc25c0c0-3447-4e4d-9742-fd00fb02562c",
+      "name": "Indicators"
+    },
+    {
+      "parameters": {
+        "url": "https://api.stlouisfed.org/fred/releases/dates",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "api_key",
+              "value": "f5bdb1b66a00ec81ec6b44282bcb12a8"
+            },
+            {
+              "name": "file_type",
+              "value": "json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -240,
+        224
+      ],
+      "id": "e8962c5f-27c6-4016-9415-56c7f5927307",
+      "name": "Fred CPI, PPI, PCE"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. 지표 목록\nconst indicators = {\n  \"DFEDTARU\": \"기준금리 (상단)\",\n  \"CPIAUCSL\": \"소비자물가지수 (CPI)\",\n  \"PCEPI\": \"개인소비지출 (PCE)\",\n  \"PPIFIS\": \"생산자물가지수 (PPI)\",\n  \"PAYEMS\": \"비농업 고용지수\",\n  \"ICSA\": \"실업수당 청구건수\",\n  \"RSAFS\": \"소매 판매\"\n};\n\nconst apiKey = 'f5bdb1b66a00ec81ec6b44282bcb12a8'; \nconst requests = [];\n\n// 2. 요청 생성 (realtime_start 제거 -> 무조건 최신값 조회)\nfor (const [id, name] of Object.entries(indicators)) {\n  // sort_order=desc & limit=1 : 날짜 기준 가장 최신 데이터 1개만 가져옴\n  const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${id}&sort_order=desc&limit=1&api_key=${apiKey}&file_type=json`;\n  \n  const req = this.helpers.httpRequest({ url: url, json: true })\n    .then(res => {\n      if (res.observations && res.observations.length > 0) {\n        const data = res.observations[0];\n        return {\n          name: name,\n          value: data.value,\n          date: data.date, // 이것은 '관측 기준일'입니다. (발표일 X)\n          realtime_start: data.realtime_start // 이 데이터가 언제 DB에 들어왔는지\n        };\n      }\n      return { name: name, value: \"N/A\", date: \"-\" };\n    })\n    .catch(err => ({ name: name, value: \"Error\", date: \"-\" }));\n\n  requests.push(req);\n}\n\n// 3. 결과 취합\nconst results = await Promise.all(requests);\n\n// 4. 테이블 생성\nlet table = \"| 지표명 | 현재값 | 데이터 기준월(일) |\\n| :--- | :---: | :---: |\\n\";\n\nresults.forEach(item => {\n  // 날짜 포맷팅 (가독성을 위해)\n  // CPI나 PCE 등 월간 지표는 보통 '1일'로 표기되므로 'YYYY년 MM월'로 해석하면 됨\n  let dateDisplay = item.date;\n  \n  // (옵션) 값이 있으면 행 추가\n  if (item.value !== \"N/A\" && item.value !== \"Error\") {\n    // 천단위 콤마 추가\n    let valStr = Number(item.value).toLocaleString(undefined, {maximumFractionDigits: 2});\n    table += `| ${item.name} | **${valStr}** | ${dateDisplay} |\\n`;\n  }\n});\n\nreturn {\n  json: {\n    market_indicators_markdown: table,\n    raw_data: results\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        64,
+        176
+      ],
+      "id": "da48a99a-3983-4d93-9896-8b61727846b8",
+      "name": "Code in JavaScript"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Indicators",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "s&p 500 map",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fred CPI, PPI, PCE": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "04a144c0-5efe-4449-a320-b7be37867ad8",
+  "meta": {
+    "instanceId": "c77870e52b22371d6976dbe0373397fe2de8e3c415d1ab55a40a072637427ce8"
+  },
+  "id": "dAWLSDa0panmYQ2d",
+  "tags": []
+}
