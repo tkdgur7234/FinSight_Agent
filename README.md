@@ -39,3 +39,13 @@ my-stock-portfolio/
 │   ├── requirements.txt   # 라이브러리 목록
 │   └── .venv/             # 가상 환경
 └── n8n/                   # n8n 관련 파일 (Docker 등)
+
+(12-22)
+1. n8n 설치 위치와 클론된 폴더 위치가 맞아야함.
+2. 가상환경 생성 및 접속
+python -m venv venv
+source venv/bin/activate
+3. 라이브러리 내려받기
+pip install -r requirements.txt
+4. 서버 실행
+uvicorn main:app --reload
