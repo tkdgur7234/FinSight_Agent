@@ -3,11 +3,11 @@
 
 기능
 1. 각종 지표, 경제 뉴스 기반 데일리 시황 리포트
-   1-1. Indicators (25-12-08)
+   1-1. Index (25-12-08)
    s&p, nasdaq, russel, bitcoin, ... 등의 일간 변동값
    1-2. S&P 500 Map (25-12-08)
    apiflash 사이트를 통해 s&p 500 map 캡쳐해서 불러오기
-   1-3. Released main index (25-12-21)
+   1-3. Released main economy_indicators (25-12-21)
    소비자물가지수(CPI), 생산자물가지수(PPI), 개인소비지출(PCE), 비농업고용지수(NFP), 신규실업수당청구, 소매판매, 기준금리(FOMC)와 같은
    전일 발표되는 주요 지표를 fred api와 forex factory 크롤링을 통해 포스팅    
    1-4. 
@@ -49,3 +49,11 @@ source venv/bin/activate
 pip install -r requirements.txt
 4. 서버 실행
 uvicorn main:app --reload
+
+----------------------------
+Daily Create Function
+
+(12-23) 
+1-1. Index
+1-2. S&P 500 map
+1-3. Economy_indicators
