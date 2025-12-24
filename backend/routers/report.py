@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from services.briefing_market_index import get_market_summary_markdown, get_sp500_map_image 
 from services.economy_indicators import get_economy_indicators
+from services.market_news_crawl_llm import get_market_news
 
 router = APIRouter(
     prefix="/report",  # 이 라우터의 모든 주소 앞에 /report가 붙음
@@ -53,4 +54,14 @@ def fetch_economy_indicators():
         # n8n은 이 data 리스트를 받아서 SplitInBatches로 돌리거나 바로 IF 노드 태우면 됨
     }
 
-
+# 1-4. 전날 시장에 영향을 끼친 주요 뉴스들 요약 정리 (Upstage AI)
+@router.post("/market-news")
+def fetch_market_news():
+    """
+    1-4. 지난 24시간 주요 미국 증시 뉴스 5선 (Upstage AI 요약)
+    """
+    news_data = get_market_news()
+    return {
+        "status": "success",
+        "data": news_data
+    }
