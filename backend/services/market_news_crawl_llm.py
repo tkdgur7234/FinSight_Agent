@@ -1,4 +1,4 @@
-# backend/services/market_news_crawl.py
+# backend/services/market_new_crawl.py
 
 import feedparser
 import os
@@ -10,19 +10,23 @@ from html import unescape
 
 load_dotenv()
 
-# --- [전략] 3-Track RSS Query 설정 ---
+# --- [전략] 3-Track 미국 증시 중심 RSS ---
 TRACKS = [
     {
+        # [Track A] Market Wrap (현상): 장 마감 시황
         "name": "Track A: Market Wrap (현상)",
-        "url": 'https://news.google.com/rss/search?q="Stock+Market+Today"+OR+"Market+Wrap"+when:1d&hl=en-US&gl=US&ceid=US:en',
+        "url": 'https://news.google.com/rss/search?q=("Wall+Street"+OR+"S%26P+500"+OR+"Nasdaq")+AND+("close"+OR+"wrap")+when:1d&hl=en-US&gl=US&ceid=US:en',
         "limit": 2
     },
     {
+        # [Track B] Why it moved (원인): 인과관계 분석
+        # "US Stocks" 등의 키워드로 맥락을 미국 증시로 한정 (아시아 뉴스라도 미국 증시와 연관되면 수집됨)
         "name": "Track B: Why it moved (원인)",
         "url": 'https://news.google.com/rss/search?q=("Wall+Street"+OR+"US+stocks")+AND+("rise"+OR+"fall")+AND+("due+to"+OR+"because"+OR+"on")+when:1d&hl=en-US&gl=US&ceid=US:en',
         "limit": 4
     },
     {
+        # [Track C] Active Movers (주도주): 종목 중심
         "name": "Track C: Active Movers (주도주)",
         "url": 'https://news.google.com/rss/search?q="stock+market"+AND+("biggest+movers"+OR+"active+stocks")+when:1d&hl=en-US&gl=US&ceid=US:en',
         "limit": 2
@@ -30,24 +34,21 @@ TRACKS = [
 ]
 
 def clean_html(raw_html):
-    """
-    RSS Description에 포함된 HTML 태그 제거 및 엔티티 복원
-    """
+    """RSS Description의 HTML 태그 제거"""
     cleanr = re.compile('<.*?>')
     cleantext = re.sub(cleanr, '', raw_html)
     return unescape(cleantext).strip()
 
 def get_market_news():
     """
-    3-Track 전략으로 뉴스를 수집하고 중복 제거 후 AI 분석 수행
+    3-Track 전략 수집 + 중복 제거 + AI 분석 (금지어 필터 제거됨)
     """
     all_articles = []
-    seen_links = set() # 중복 제거용 (URL 기준)
+    seen_links = set()
 
-    print("🚀 3-Track 뉴스 크롤링 시작...")
+    print("🚀 3-Track 미국 증시 뉴스 크롤링 시작...")
 
     try:
-        # 1. 트랙별 크롤링 수행
         for track in TRACKS:
             feed = feedparser.parse(track["url"])
             count = 0
@@ -56,17 +57,15 @@ def get_market_news():
                 if count >= track["limit"]:
                     break
                 
-                # 중복 체크 (Link 기준)
+                # 1. 중복 URL 체크
                 if entry.link in seen_links:
                     continue
                 
                 seen_links.add(entry.link)
                 
-                # Description 전처리 (토큰 절약 및 가독성)
+                # Description 전처리
                 raw_desc = entry.description if 'description' in entry else ""
                 clean_desc = clean_html(raw_desc)
-                
-                # 너무 짧거나 의미 없는 description은 제목으로 대체하거나 제외
                 summary_text = clean_desc if len(clean_desc) > 20 else entry.title
 
                 all_articles.append({
@@ -74,7 +73,7 @@ def get_market_news():
                     "title": entry.title,
                     "link": entry.link,
                     "pub_date": entry.published if 'published' in entry else "",
-                    "summary_raw": summary_text # AI에게 보낼 핵심 재료
+                    "summary_raw": summary_text
                 })
                 count += 1
             
@@ -83,7 +82,7 @@ def get_market_news():
         if not all_articles:
             return {"status": "error", "message": "No news found"}
 
-        # 2. AI 분석 요청 (종합 요약)
+        # AI 분석 요청
         ai_result = analyze_with_upstage_summary(all_articles)
         
         return {
@@ -98,8 +97,7 @@ def get_market_news():
 
 def analyze_with_upstage_summary(articles):
     """
-    수집된 뉴스들의 Title + Description을 종합하여
-    '시장 핵심 재료'를 한 문단으로 정리하고, 각 뉴스를 한국어로 번역
+    Upstage Solar API: 종합 요약(한국어) + 제목 번역
     """
     api_key = os.getenv("UPSTAGE_API_KEY")
     if not api_key:
@@ -111,28 +109,27 @@ def analyze_with_upstage_summary(articles):
         base_url="https://api.upstage.ai/v1/solar"
     )
 
-    # LLM에게 던질 텍스트 구성 (Title + Description)
     context_text = ""
     for i, a in enumerate(articles):
         context_text += f"[News {i+1}] ({a['track']})\nTitle: {a['title']}\nContent: {a['summary_raw'][:300]}\n\n"
 
-    # [프롬프트 엔지니어링]
+    # [프롬프트] 글로벌 이슈가 포함되더라도 미국 증시에 미친 영향을 중심으로 분석하도록 유도
     system_prompt = """
-    You are an expert AI Financial Analyst. 
-    Your goal is to write a 'Daily Market Briefing' based on the provided US stock market news.
+    You are an expert AI Financial Analyst specializing in the US Stock Market. 
+    Your goal is to write a 'Daily Market Briefing'.
 
     Task 1: Market Driver Synthesis
-    - Read all news headlines and contents.
-    - Identify the single most critical reason why the market moved yesterday.
+    - Identify the single most critical reason why the US market moved yesterday.
+    - If the cause is global (e.g., Japan rates, China stimulus, Geopolitics), explicitly explain how it affected the US market.
     - Write a cohesive paragraph (3-4 sentences) **in Korean language**.
-    - **CRITICAL:** The 'market_summary' value MUST be written in **Korean (Hangul)**.
+    - **CRITICAL:** The 'market_summary' MUST be written in **Korean (Hangul)**.
 
     Task 2: Headline Translation
-    - Translate the titles of the provided news into professional Korean business language.
+    - Translate the titles into professional Korean business language.
 
     Output MUST be in JSON format:
     {
-        "market_summary": "여기에 한국어로 된 요약글을 적으세요...",
+        "market_summary": "한국어 요약...",
         "news_list": [
             {"korean_title": "...", "original_title": "..."}
         ]
@@ -150,23 +147,17 @@ def analyze_with_upstage_summary(articles):
         )
         
         content = response.choices[0].message.content
-        
-        # JSON 파싱 전처리
         cleaned_content = content.replace("```json", "").replace("```", "").strip()
         ai_data = json.loads(cleaned_content)
         
-        # 원본 리스트에 한국어 제목 매핑
         final_news_list = []
         ai_list = ai_data.get("news_list", [])
         
         for i, article in enumerate(articles):
-            korean_title = article["title"] # 기본값
-            
-            # AI 결과 순서 매칭 시도
+            korean_title = article["title"]
             if i < len(ai_list):
                 korean_title = ai_list[i].get("korean_title", article["title"])
             
-            # 불필요한 필드 정리 후 최종 리스트 생성
             final_news_list.append({
                 "title": korean_title,
                 "original_title": article["title"],
