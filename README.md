@@ -1,4 +1,4 @@
-# StockMarket_Auto_Reporter.n8n
+# FinSight_Agent
 주식 시장 종합 분석 리포팅 시스템
 
 기능
@@ -51,7 +51,9 @@ python -m venv venv
 source venv/bin/activate
 3. 라이브러리 내려받기
 pip install -r requirements.txt
-4. 서버 실행
+4. ".env" 환경변수 파일 생성
+api 키 입력
+5. 서버 실행
 uvicorn main:app --reload
 
 ----------------------------
