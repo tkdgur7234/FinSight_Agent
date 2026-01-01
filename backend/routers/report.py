@@ -1,7 +1,8 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Response
 from services.briefing_market_index import get_market_summary_markdown, get_sp500_map_image 
 from services.economy_indicators import get_economy_indicators
 from services.market_news_crawl_llm import get_market_news
+from services.email_builder import generate_email_report
 
 router = APIRouter(
     prefix="/report",  # 이 라우터의 모든 주소 앞에 /report가 붙음
@@ -65,3 +66,15 @@ def fetch_market_news():
         "status": "success",
         "data": news_data
     }
+
+
+# 최종. 모든 데이터를 취합하여 완성된 HTML 이메일 본문 반환 엔드포인트
+@router.post("/daily-briefing")
+def get_daily_briefing_html():
+    try:
+        html_content = generate_email_report()
+        return Response(content=html_content, media_type="text/html")
+    except Exception as e:
+        # 서버 에러 로그를 명확히 보기 위해 print 추가
+        print(f"❌ Server Error: {e}")
+        return Response(content=f"<h1>Server Error</h1><p>{str(e)}</p>", status_code=500)
