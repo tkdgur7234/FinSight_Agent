@@ -3,6 +3,7 @@ from services.briefing_market_index import get_market_summary_markdown, get_sp50
 from services.economy_indicators import get_economy_indicators
 from services.market_news_crawl_llm import get_market_news
 from services.email_builder import generate_email_report
+from services.sentiment_analysis import get_sentiment_analysis
 
 router = APIRouter(
     prefix="/report",  # 이 라우터의 모든 주소 앞에 /report가 붙음
@@ -52,7 +53,6 @@ def fetch_economy_indicators():
     return {
         "status": "success",
         "data": data 
-        # n8n은 이 data 리스트를 받아서 SplitInBatches로 돌리거나 바로 IF 노드 태우면 됨
     }
 
 # 1-4. 전날 시장에 영향을 끼친 주요 뉴스들 요약 정리 (Upstage AI)
@@ -67,6 +67,17 @@ def fetch_market_news():
         "data": news_data
     }
 
+# 2-1. 관심 종목 커뮤니티 감성 분석 (공포/탐욕 지수) 엔드포인트
+@router.post("/sentiment-analysis")
+def fetch_sentiment_analysis():
+    """
+    2-1. 관심 종목 커뮤니티 감성 분석 (공포/탐욕 지수)
+    """
+    data = get_sentiment_analysis()
+    return {
+        "status": "success",
+        "data": data
+    }
 
 # 최종. 모든 데이터를 취합하여 완성된 HTML 이메일 본문 반환 엔드포인트
 @router.post("/daily-briefing")

@@ -157,7 +157,7 @@ def analyze_with_upstage_summary(articles):
 
     try:
         response = client.chat.completions.create(
-            model="solar-1-mini-chat",
+            model="solar-pro2",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"Here is the collected news data:\n{context_text}"}
