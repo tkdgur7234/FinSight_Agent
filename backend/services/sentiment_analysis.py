@@ -5,183 +5,221 @@ import json
 import re
 from datetime import datetime
 from time import mktime
+from bs4 import BeautifulSoup  # HTML 파싱을 위해 추가
 from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
 
 # =========================================================
-# ▼▼▼ [사용자 설정] 종목 리스트 ▼▼▼
+# ▼▼▼ [설정] 종목 리스트 ▼▼▼
 # =========================================================
 TARGET_STOCKS = [
     {
-        "ticker": "TSLA",         # [미국] Reddit 검색어
+        "ticker": "TSLA",         
         "name": "Tesla",
         "fetch_limit": 50,
-        "avg_velocity": 10
+        "avg_velocity": 10,
+        "use_naver": False   # 해외주식 -> Reddit 권장
     },
     {
-        "ticker": "005930",       # [한국] 종목코드 (삼성전자)
+        "ticker": "005930",       
         "name": "삼성전자",
         "fetch_limit": 50,
-        "avg_velocity": 20
+        "avg_velocity": 20,
+        "use_naver": True    # 국내주식 -> Naver HTML 크롤링
+    },
+    {
+        "ticker": "GOOG.O",       
+        "name": "알파벳(구글)",
+        "fetch_limit": 30,    
+        "avg_velocity": 5,
+        "use_naver": False   # 해외주식은 네이버 HTML 게시판이 없으므로 False로 설정
     }
 ]
 
-# ▼▼▼ [모델 설정] Update: solar-pro -> solar-pro2 ▼▼▼
-MODEL_FAST = "solar-1-mini-chat"   # 단순 요약용
-MODEL_SMART = "solar-pro2"          # 고성능 분석용
+MODEL_FAST = "solar-1-mini-chat"
+MODEL_SMART = "solar-pro2"
 
 SPAM_KEYWORDS = ["crypto", "whatsapp", "telegram", "giveaway", "free", "discord", "리딩", "무료", "카톡", "band"]
 
 def clean_text(text):
-    """특수문자 및 불필요한 공백 제거"""
-    text = re.sub(r'<[^>]+>', '', text) # HTML 태그 제거
+    text = re.sub(r'<[^>]+>', '', text)
     text = re.sub(r'\s+', ' ', text).strip()
     return text
 
 def parse_json_safely(text):
-    """
-    [핵심 수정] LLM 응답에서 JSON 부분만 정규식으로 정밀 추출
-    오류 원인: JSON 뒤에 잡담이 섞여 있으면 json.loads()가 터짐
-    """
     try:
-        # 1. ```json ... ``` 코드 블록 제거
-        text = text.replace("```json", "").replace("```", "").strip()
+        text = text.strip()
+        text = text.replace("```json", "").replace("```", "")
         
-        # 2. 가장 겉에 있는 {} 또는 [] 찾기
-        # DOTALL: 줄바꿈이 있어도 매칭
-        match = re.search(r'(\{.*\}|\[.*\])', text, re.DOTALL)
-        if match:
-            clean_json = match.group(1)
+        start_idx = -1
+        end_idx = -1
+
+        if '[' in text and ']' in text:
+            start_idx = text.find('[')
+            end_idx = text.rfind(']') + 1
+        elif '{' in text and '}' in text:
+            start_idx = text.find('{')
+            end_idx = text.rfind('}') + 1
+            
+        if start_idx != -1 and end_idx != -1:
+            clean_json = text[start_idx:end_idx]
             return json.loads(clean_json)
-        else:
-            # 매칭 안되면 원본 시도
-            return json.loads(text)
-    except Exception:
+        
+        return json.loads(text)
+    except Exception as e:
         return None
 
 def check_volume_spike(posts, avg_velocity):
-    """
-    게시글 리젠 속도 계산 (Naver/Reddit 통합 지원)
-    """
     if len(posts) < 5: return "데이터 부족", 0
-
     try:
-        # 최신 글과 가장 오래된 글의 시간 차이 계산
         newest_date = posts[0]['dt']
         oldest_date = posts[-1]['dt']
-        
-        # 시간 차이 (시간 단위)
         diff_seconds = (newest_date - oldest_date).total_seconds()
         diff_hours = diff_seconds / 3600
-        
-        if diff_hours <= 0: diff_hours = 0.01 # 0으로 나누기 방지
-
+        if diff_hours <= 0: diff_hours = 0.01
         velocity = len(posts) / diff_hours
         ratio = velocity / avg_velocity if avg_velocity > 0 else 1.0
-
+        
         status = "Normal"
         if ratio > 2.5: status = "🔥 Volume Spike"
         elif ratio > 1.5: status = "⚠️ Active"
-        
         return status, round(velocity, 1)
-
-    except Exception as e:
-        # print(f"Velocity Calc Error: {e}")
+    except:
         return "Calc Error", 0
 
 def get_reddit_posts(ticker, limit):
-    """Reddit RSS 크롤링"""
-    rss_url = f"https://www.reddit.com/r/stocks+wallstreetbets+investing+technology/search.rss?q={ticker}&sort=new&restrict_sr=on&limit={limit+20}"
-    feed = feedparser.parse(rss_url)
-    posts = []
+    rss_url = f"https://www.reddit.com/r/stocks+wallstreetbets+investing+technology/search.rss?q={ticker}&sort=new&restrict_sr=on&limit=100"
     
-    print(f"🔍 [Reddit] {ticker} 수집 중...")
-    for entry in feed.entries:
-        if len(posts) >= limit: break
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+
+    posts = []
+    print(f"🔍 [Reddit] {ticker} 수집 시도 (Max 100)...")
+    
+    try:
+        resp = requests.get(rss_url, headers=headers, timeout=10)
         
-        content = clean_text(entry.description) if 'description' in entry else ""
-        full_text = f"{entry.title} {content}"
+        if resp.status_code != 200:
+            print(f"   -> Reddit 요청 실패 (Code: {resp.status_code})")
+            return []
+
+        feed = feedparser.parse(resp.content)
         
-        if len(full_text) < 10: continue
-        if any(k in full_text.lower() for k in SPAM_KEYWORDS): continue
+        if not feed.entries:
+            print("   -> Reddit 데이터 0건")
+            return []
+
+        for entry in feed.entries:
+            if len(posts) >= limit: break
+            
+            content = clean_text(entry.description) if 'description' in entry else ""
+            full_text = f"{entry.title} {content}"
+            
+            if len(full_text) < 10: continue
+            if any(k in full_text.lower() for k in SPAM_KEYWORDS): continue
+            
+            if hasattr(entry, 'published_parsed') and entry.published_parsed:
+                dt = datetime.fromtimestamp(mktime(entry.published_parsed))
+            else:
+                dt = datetime.now()
+                
+            posts.append({"text": full_text[:500], "dt": dt})
+            
+    except Exception as e:
+        print(f"   -> Reddit Error: {e}")
+        return []
         
-        # 날짜 표준화 (struct_time -> datetime)
-        dt = datetime.fromtimestamp(mktime(entry.published_parsed))
-        
-        posts.append({
-            "text": full_text[:500],
-            "dt": dt
-        })
     return posts
 
 def get_naver_posts(code, limit):
     """
-    [업그레이드] 네이버 모바일 증권 API 사용 (JSON 파싱)
-    HTML 파싱보다 빠르고 날짜 정보를 정확히 얻을 수 있음
+    [완전 변경] 네이버 금융 PC 버전 HTML 크롤링 (API 미사용)
+    대상 URL: https://finance.naver.com/item/board.naver?code={code}
     """
     posts = []
-    print(f"🔍 [Naver API] {code} 종토방 수집 중...")
     
-    # 네이버 모바일 종목토론실 API URL
-    url = f"https://m.stock.naver.com/api/discuss/local/{code}?offset=0&limit={limit+10}"
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X)',
-        'Referer': f'https://m.stock.naver.com/domestic/stock/{code}/discuss'
-    }
-    
-    try:
-        res = requests.get(url, headers=headers)
-        data = res.json()
-        
-        # API 구조: data --> 리스트 형태
-        for item in data:
-            if len(posts) >= limit: break
-            
-            title = item.get('title', '')
-            contents = item.get('contents', '')
-            full_text = f"{title} {contents}"
-            full_text = clean_text(full_text)
-            
-            # 날짜 파싱 (API는 '2025-01-05 14:30:00' 형태로 줌)
-            date_str = item.get('date', '') # YYYY-MM-DD HH:MM:SS
-            try:
-                dt = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
-            except:
-                dt = datetime.now() # 에러 시 현재 시간
+    # 1. 해외 주식 체크 (숫자가 아니면 지원 불가)
+    if not code.isdigit():
+        print(f"⚠️ [Naver] 해외주식({code})은 PC HTML 게시판이 없어 크롤링 불가능합니다. (Reddit 사용 권장)")
+        return []
 
-            if len(full_text) < 5: continue
-            if any(k in full_text for k in SPAM_KEYWORDS): continue
+    print(f"🔍 [Naver HTML] {code} PC 종토방 수집 시도...")
+    
+    # PC 브라우저 User-Agent
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+
+    page = 1
+    max_page = 5 # 너무 많이 긁지 않도록 제한
+    
+    while len(posts) < limit and page <= max_page:
+        try:
+            url = f"https://finance.naver.com/item/board.naver?code={code}&page={page}"
+            res = requests.get(url, headers=headers, timeout=5)
             
-            posts.append({
-                "text": full_text[:300], # 너무 길면 자름
-                "dt": dt
-            })
+            if res.status_code != 200:
+                print(f"   -> 페이지 접속 실패: {res.status_code}")
+                break
+
+            # 인코딩 설정 (한글 깨짐 방지)
+            res.encoding = 'cp949' 
+            soup = BeautifulSoup(res.text, 'html.parser')
             
-    except Exception as e:
-        print(f"Naver API Error: {e}")
-        
+            # 테이블 행 가져오기
+            rows = soup.select("div.section.inner_sub table.type2 tbody tr")
+            
+            if not rows:
+                break
+
+            for row in rows:
+                if len(posts) >= limit: break
+                
+                # 마우스 오버 시 나오는 본문 미리보기 or 제목
+                title_tag = row.select_one("td.title a")
+                if not title_tag: continue
+                
+                title = title_tag.get("title", "").strip()
+                if not title:
+                    title = title_tag.text.strip()
+                
+                # 날짜 추출 (YYYY.MM.DD HH:mm)
+                date_tag = row.select_one("td:nth-of-type(6) span")
+                date_str = date_tag.text.strip() if date_tag else ""
+                
+                try:
+                    dt = datetime.strptime(date_str, "%Y.%m.%d %H:%M")
+                except:
+                    dt = datetime.now()
+
+                full_text = clean_text(title)
+                
+                if len(full_text) < 2: continue
+                if any(k in full_text for k in SPAM_KEYWORDS): continue
+                
+                posts.append({"text": full_text[:300], "dt": dt})
+            
+            page += 1
+            
+        except Exception as e:
+            print(f"   -> Naver HTML Crawl Error: {e}")
+            break
+            
     return posts
 
 def summarize_with_llm(ticker, posts):
-    """
-    [2차 필터링 & 요약] -> solar-1-mini-chat
-    """
     api_key = os.getenv("UPSTAGE_API_KEY")
     client = OpenAI(api_key=api_key, base_url="https://api.upstage.ai/v1/solar")
 
-    # 최근 글 순서대로 텍스트 병합
     context_text = "\n".join([f"- {p['text']}" for p in posts])
 
     system_prompt = f"""
-    You are a data filtering assistant.
     Filter out noise from the comments about {ticker}.
-    Select exactly **10 most meaningful sentences** that explain the current investor sentiment.
-    
-    Output format:
-    A pure JSON list of strings. 
-    Example: ["High expectation for earnings...", "Worried about CEO risk..."]
+    Select exactly **10 most meaningful sentences**.
+    Output format must be a pure JSON list of strings: ["Msg 1", "Msg 2"]
     """
 
     try:
@@ -194,42 +232,31 @@ def summarize_with_llm(ticker, posts):
             temperature=0.1
         )
         content = response.choices[0].message.content
-        
-        # [수정] 안전한 JSON 파싱 함수 사용
-        parsed_data = parse_json_safely(content)
-        if isinstance(parsed_data, list):
-            return parsed_data
-        else:
-            return []
-            
+        result = parse_json_safely(content)
+        return result if isinstance(result, list) else []
     except Exception as e:
         print(f"Summary Error: {e}")
         return []
 
 def analyze_final_sentiment(ticker, key_sentences):
-    """
-    [최종 분석] -> solar-pro2
-    """
     api_key = os.getenv("UPSTAGE_API_KEY")
     client = OpenAI(api_key=api_key, base_url="https://api.upstage.ai/v1/solar")
 
     sentences_text = "\n".join([f"{i+1}. {s}" for i, s in enumerate(key_sentences)])
-
+    
     system_prompt = f"""
-    You are an expert Stock Sentiment Analyst.
-    Based on the key user opinions for {ticker}, provide a deep analysis.
-
-    Output JSON Format:
+    Analyze investor sentiment for {ticker}.
+    Output JSON:
     {{
         "score": <int 0-100>,
         "status": "<Fear/Neutral/Greed>",
-        "reason_korean": "<Explain the reason in Korean>"
+        "reason_korean": "<Explain in Korean>"
     }}
     """
 
     try:
         response = client.chat.completions.create(
-            model=MODEL_SMART, # solar-pro2 사용
+            model=MODEL_SMART, 
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": sentences_text}
@@ -237,10 +264,7 @@ def analyze_final_sentiment(ticker, key_sentences):
             temperature=0.1
         )
         content = response.choices[0].message.content
-        
-        # [수정] 안전한 JSON 파싱 함수 사용
         return parse_json_safely(content)
-        
     except Exception as e:
         print(f"Analysis Error: {e}")
         return None
@@ -250,40 +274,51 @@ def get_sentiment_analysis():
     print("🚀 커뮤니티 감성 분석 시작...")
     
     for stock in TARGET_STOCKS:
-        ticker = stock["ticker"]
-        limit = stock["fetch_limit"]
-        
-        # 1. 소스 분기 (숫자면 네이버, 아니면 Reddit)
-        if ticker.isdigit():
-            raw_posts = get_naver_posts(ticker, limit)
-        else:
-            raw_posts = get_reddit_posts(ticker, limit)
+        try:
+            ticker = stock["ticker"]
+            limit = stock["fetch_limit"]
             
-        if not raw_posts: 
-            print(f"⚠️ {stock['name']} 데이터 없음")
+            # [수정] 사용자가 강제로 use_naver=True를 해도, 해외주식(문자 티커)은 HTML 크롤링 불가하므로 강제 Reddit 전환
+            use_naver = stock.get("use_naver", False)
+            
+            if use_naver and not ticker.isdigit():
+                print(f"⚠️ [{stock['name']}] 네이버 HTML 크롤링은 국내주식(숫자코드)만 지원합니다. Reddit으로 전환합니다.")
+                use_naver = False
+
+            if use_naver:
+                raw_posts = get_naver_posts(ticker, limit)
+            else:
+                raw_posts = get_reddit_posts(ticker, limit)
+                
+            if not raw_posts: 
+                print(f"⚠️ [{stock['name']}] 수집된 데이터가 없습니다 (0건).")
+                continue
+            
+            # 2. 분석
+            vol_status, velocity = check_volume_spike(raw_posts, stock["avg_velocity"])
+            filtered_count = len(raw_posts)
+            
+            print(f"🤖 [{stock['name']}] 요약 중 ({filtered_count}건)...")
+            key_sentences = summarize_with_llm(stock["name"], raw_posts)
+            
+            if not key_sentences: 
+                print(f"   -> 요약 실패 (LLM 응답 오류)")
+                continue
+            
+            print(f"🧠 [{stock['name']}] 심층 분석 중...")
+            final_data = analyze_final_sentiment(stock["name"], key_sentences)
+            
+            if final_data:
+                final_data["ticker"] = stock["name"]
+                final_data["volume_status"] = vol_status
+                final_data["velocity"] = velocity
+                final_data["filtered_count"] = filtered_count
+                final_data["summary_sentences"] = key_sentences
+                results.append(final_data)
+                print(f"   -> ✅ 완료: {stock['name']}")
+                
+        except Exception as e:
+            print(f"❌ [{stock.get('name')}] 처리 중 치명적 오류: {e}")
             continue
-        
-        # 2. Volume Spike (이제 네이버도 가능!)
-        vol_status, velocity = check_volume_spike(raw_posts, stock["avg_velocity"])
-        
-        # 3. 요약 (Mini)
-        print(f"🤖 [{stock['name']}] 핵심 요약 추출 중 ({MODEL_FAST})...")
-        key_sentences = summarize_with_llm(stock["name"], raw_posts)
-        
-        if not key_sentences: 
-            print("   -> 요약 실패")
-            continue
-        
-        # 4. 최종 분석 (Pro2)
-        print(f"🧠 [{stock['name']}] 감성 분석 중 ({MODEL_SMART})...")
-        final_data = analyze_final_sentiment(stock["name"], key_sentences)
-        
-        if final_data:
-            final_data["ticker"] = stock["name"]
-            final_data["volume_status"] = vol_status
-            final_data["velocity"] = velocity
-            final_data["summary_sentences"] = key_sentences
-            results.append(final_data)
-            print("   -> 분석 완료 ✅")
             
     return results
