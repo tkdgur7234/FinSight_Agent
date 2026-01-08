@@ -14,31 +14,31 @@ load_dotenv()
 # =========================================================
 # ▼▼▼ [설정] 종목 리스트 ▼▼▼
 # =========================================================
+# 이제 'avg_velocity'는 초기값일 뿐, 데이터가 쌓이면 무시됩니다.
 TARGET_STOCKS = [
     {
         "ticker": "TSLA",         
         "name": "Tesla",
         "fetch_limit": 50,
-        "avg_velocity": 10,
+        "avg_velocity": 10, # 초기값 (데이터 없을 때 사용)
         "use_naver": False 
     },
-    {
-        "ticker": "005930",       
-        "name": "삼성전자",
-        "fetch_limit": 50,
-        "avg_velocity": 20,
-        "use_naver": True 
-    }
-    # 구글(알파벳)은 요청대로 제외함
+    #{
+    #   "ticker": "005930",       
+    #    "name": "삼성전자",
+    #    "fetch_limit": 50,
+    #    "avg_velocity": 20, # 초기값
+    #    "use_naver": True 
+    #}
 ]
 
 MODEL_FAST = "solar-1-mini-chat"
 MODEL_SMART = "solar-pro2"
+HISTORY_FILE = "velocity_history.json"  # 속도 기록 저장 파일
 
-SPAM_KEYWORDS = ["crypto", "whatsapp", "telegram", "giveaway", "free", "discord", "리딩", "무료", "카톡", "band"]
+SPAM_KEYWORDS = ["crypto", "whatsapp", "telegram", "giveaway", "free", "discord", "리딩", "무료", "카톡", "band", "가입", "수익"]
 
 def clean_text(text):
-    # HTML 태그 제거 및 공백 정리
     text = re.sub(r'<[^>]+>', '', text)
     text = re.sub(r'\s+', ' ', text).strip()
     return text
@@ -66,7 +66,95 @@ def parse_json_safely(text):
     except Exception as e:
         return None
 
-def check_volume_spike(posts, avg_velocity):
+# ---------------------------------------------------------
+# [신규 기능] 파일 기반 속도 데이터 관리
+# ---------------------------------------------------------
+def load_velocity_history():
+    """기록된 속도 데이터를 불러옵니다."""
+    if not os.path.exists(HISTORY_FILE):
+        return {}
+    try:
+        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except:
+        return {}
+
+def save_velocity_history(history):
+    """속도 데이터를 파일에 저장합니다."""
+    try:
+        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(history, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print(f"⚠️ History Save Error: {e}")
+
+def get_dynamic_avg_velocity(ticker, default_val):
+    """
+    [핵심] 저장된 기록을 바탕으로 '동적 평균 속도'를 계산합니다.
+    최근 10번의 기록 평균을 사용합니다.
+    """
+    history = load_velocity_history()
+    records = history.get(ticker, [])
+    
+    if not records:
+        return default_val # 기록 없으면 설정값 사용
+    
+    # [변경] 딕셔너리 리스트에서 'velocity' 값만 추출
+    # 예: [{'date': '...', 'velocity': 10}, ...] -> [10, 15, ...]
+    velocities = []
+    for r in records:
+        if isinstance(r, dict) and 'velocity' in r:
+            velocities.append(r['velocity'])
+        elif isinstance(r, (int, float)): # 호환성: 옛날 숫자 데이터가 있다면 포함
+            velocities.append(r)
+            
+    if not velocities:
+        return default_val
+
+    # 최근 14일(2주) 치 평균 사용
+    recent_velocities = velocities[-14:]
+    avg = sum(recent_velocities) / len(recent_velocities)
+    
+    return avg
+
+def update_velocity_history(ticker, current_velocity):
+    """
+    오늘 날짜의 기록이 이미 있으면 '갱신(덮어쓰기)'하고,
+    없으면 '추가(Append)'합니다.
+    """
+    if current_velocity <= 0: return
+
+    history = load_velocity_history()
+    if ticker not in history:
+        history[ticker] = []
+    
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    records = history[ticker]
+    
+    # [핵심 로직] 마지막 기록이 오늘인지 확인
+    is_today_exist = False
+    
+    if records:
+        last_record = records[-1]
+        # 기록이 딕셔너리 형태이고, 날짜가 오늘이면
+        if isinstance(last_record, dict) and last_record.get('date') == today_str:
+            # 오늘의 기록을 최신 값으로 업데이트 (덮어쓰기)
+            last_record['velocity'] = current_velocity
+            is_today_exist = True
+            
+    # 오늘 기록이 없으면 새로 추가
+    if not is_today_exist:
+        records.append({
+            "date": today_str,
+            "velocity": current_velocity
+        })
+    
+    # 최근 60일 데이터만 유지
+    if len(records) > 60:
+        history[ticker] = records[-60:]
+        
+    save_velocity_history(history)
+
+def check_volume_spike(ticker, posts, default_velocity):
     if len(posts) < 5: return "데이터 부족", 0
     try:
         newest_date = posts[0]['dt']
@@ -74,14 +162,30 @@ def check_volume_spike(posts, avg_velocity):
         diff_seconds = (newest_date - oldest_date).total_seconds()
         diff_hours = diff_seconds / 3600
         if diff_hours <= 0: diff_hours = 0.01
-        velocity = len(posts) / diff_hours
-        ratio = velocity / avg_velocity if avg_velocity > 0 else 1.0
+        
+        # 1. 현재 속도 계산
+        current_velocity = len(posts) / diff_hours
+        
+        # 2. [변경] 동적 평균 속도 가져오기 (DB 대용)
+        # 기록된 평균을 우선 사용하고, 없으면 default_velocity 사용
+        avg_velocity = get_dynamic_avg_velocity(ticker, default_velocity)
+        
+        # 3. 이번 측정값을 기록에 저장 (다음번 평균을 위해)
+        # 단, '데이터 부족'이거나 이상치일 때는 저장 안 할 수도 있음
+        update_velocity_history(ticker, current_velocity)
+
+        ratio = current_velocity / avg_velocity if avg_velocity > 0 else 1.0
         
         status = "Normal"
         if ratio > 2.5: status = "🔥 Volume Spike"
         elif ratio > 1.5: status = "⚠️ Active"
-        return status, round(velocity, 1)
-    except:
+        
+        # 디버깅용 로그
+        print(f"   -> ⏱️ 속도: {current_velocity:.1f} (평균: {avg_velocity:.1f}) | 비율: {ratio:.1f}배")
+        
+        return status, round(current_velocity, 1)
+    except Exception as e:
+        print(f"Calc Error: {e}")
         return "Calc Error", 0
 
 def get_reddit_posts(ticker, limit):
@@ -96,20 +200,15 @@ def get_reddit_posts(ticker, limit):
     
     try:
         resp = requests.get(rss_url, headers=headers, timeout=10)
-        
         if resp.status_code != 200:
-            print(f"   -> Reddit 요청 실패 (Code: {resp.status_code})")
             return []
 
         feed = feedparser.parse(resp.content)
-        
         if not feed.entries:
-            print("   -> Reddit 데이터 0건")
             return []
 
         for entry in feed.entries:
             if len(posts) >= limit: break
-            
             content = clean_text(entry.description) if 'description' in entry else ""
             full_text = f"{entry.title} {content}"
             
@@ -120,66 +219,40 @@ def get_reddit_posts(ticker, limit):
                 dt = datetime.fromtimestamp(mktime(entry.published_parsed))
             else:
                 dt = datetime.now()
-                
             posts.append({"text": full_text[:500], "dt": dt})
-            
-    except Exception as e:
-        print(f"   -> Reddit Error: {e}")
+    except:
         return []
-        
     return posts
 
 def get_naver_posts(code, limit):
-    """
-    네이버 금융 PC 버전 HTML 크롤링
-    """
     posts = []
-    
-    if not code.isdigit():
-        print(f"⚠️ [Naver] 해외주식({code})은 지원하지 않습니다.")
-        return []
+    if not code.isdigit(): return []
 
     print(f"🔍 [Naver HTML] {code} PC 종토방 수집 시도...")
-    
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    }
-
+    headers = {'User-Agent': 'Mozilla/5.0'}
     page = 1
-    max_page = 5 
     
-    while len(posts) < limit and page <= max_page:
+    while len(posts) < limit and page <= 5:
         try:
             url = f"https://finance.naver.com/item/board.naver?code={code}&page={page}"
             res = requests.get(url, headers=headers, timeout=5)
-            
-            if res.status_code != 200:
-                print(f"   -> 페이지 접속 실패: {res.status_code}")
-                break
+            if res.status_code != 200: break
 
-            # [인코딩 수정] 한글 깨짐 방지 (euc-kr)
             try:
-                html_text = res.content.decode('euc-kr', 'replace')
-            except UnicodeDecodeError:
-                html_text = res.content.decode('utf-8', 'replace')
+                html_text = res.content.decode('utf-8')
+            except:
+                html_text = res.content.decode('cp949', 'ignore')
                 
             soup = BeautifulSoup(html_text, 'html.parser')
             rows = soup.select("div.section.inner_sub table.type2 tbody tr")
-            
-            if not rows:
-                break
+            if not rows: break
 
             for row in rows:
                 if len(posts) >= limit: break
-                
                 title_tag = row.select_one("td.title a")
                 if not title_tag: continue
                 
-                title = title_tag.get("title", "").strip()
-                if not title:
-                    title = title_tag.text.strip()
-                
-                # 날짜 추출
+                title = title_tag.get("title", "").strip() or title_tag.text.strip()
                 date_tag = row.select_one("td:nth-of-type(6) span")
                 date_str = date_tag.text.strip() if date_tag else ""
                 
@@ -189,56 +262,35 @@ def get_naver_posts(code, limit):
                     dt = datetime.now()
 
                 full_text = clean_text(title)
-                
                 if len(full_text) < 2: continue
                 if any(k in full_text for k in SPAM_KEYWORDS): continue
-                
                 posts.append({"text": full_text[:300], "dt": dt})
-            
             page += 1
-            
-        except Exception as e:
-            print(f"   -> Naver HTML Crawl Error: {e}")
+        except:
             break
-            
     return posts
 
 def summarize_with_llm(ticker, posts):
     api_key = os.getenv("UPSTAGE_API_KEY")
     client = OpenAI(api_key=api_key, base_url="https://api.upstage.ai/v1/solar")
 
-    # [핵심 수정] 입력 텍스트 길이 제한 (과도한 토큰 방지)
-    # 50개 글을 다 합치면 너무 길어질 수 있으므로, 최대 3000자까지만 자릅니다.
     full_content = "\n".join([f"- {p['text']}" for p in posts])
     if len(full_content) > 3000:
         full_content = full_content[:3000] + "...(truncated)"
-    
-    # 디버깅: 입력 길이 확인
-    # print(f"   -> LLM 입력 길이: {len(full_content)}자")
 
     system_prompt = f"""
     Filter out noise from the comments about {ticker}.
-    Select exactly **10 most meaningful sentences**.
-    Output format must be a pure JSON list of strings: ["Msg 1", "Msg 2"]
+    Select exactly **10 most meaningful sentences/titles**.
+    Output format must be a pure JSON list: ["Opinion 1", "Opinion 2"]
     """
-
     try:
-        # [수정] timeout 설정 추가 (20초)
         response = client.chat.completions.create(
             model=MODEL_FAST,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": full_content}
-            ],
-            temperature=0.1,
-            timeout=20 
+            messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": full_content}],
+            temperature=0.1, timeout=30
         )
-        content = response.choices[0].message.content
-        result = parse_json_safely(content)
-        return result if isinstance(result, list) else []
-    except Exception as e:
-        # [수정] 에러 상세 출력
-        print(f"   -> ❌ 요약 실패 (LLM Error): {str(e)}")
+        return parse_json_safely(response.choices[0].message.content) or []
+    except:
         return []
 
 def analyze_final_sentiment(ticker, key_sentences):
@@ -246,31 +298,18 @@ def analyze_final_sentiment(ticker, key_sentences):
     client = OpenAI(api_key=api_key, base_url="https://api.upstage.ai/v1/solar")
 
     sentences_text = "\n".join([f"{i+1}. {s}" for i, s in enumerate(key_sentences)])
-    
     system_prompt = f"""
     Analyze investor sentiment for {ticker}.
-    Output JSON:
-    {{
-        "score": <int 0-100>,
-        "status": "<Fear/Neutral/Greed>",
-        "reason_korean": "<Explain in Korean>"
-    }}
+    Output JSON: {{ "score": <0-100>, "status": "<Extreme Fear/Fear/Neutral/Greed/Extreme Greed>", "reason_korean": "..." }}
     """
-
     try:
         response = client.chat.completions.create(
-            model=MODEL_SMART, 
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": sentences_text}
-            ],
-            temperature=0.1,
-            timeout=20
+            model=MODEL_SMART,
+            messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": sentences_text}],
+            temperature=0.1, timeout=30
         )
-        content = response.choices[0].message.content
-        return parse_json_safely(content)
-    except Exception as e:
-        print(f"   -> ❌ 분석 실패 (LLM Error): {str(e)}")
+        return parse_json_safely(response.choices[0].message.content)
+    except:
         return None
 
 def get_sentiment_analysis():
@@ -282,32 +321,22 @@ def get_sentiment_analysis():
             ticker = stock["ticker"]
             limit = stock["fetch_limit"]
             
-            use_naver = stock.get("use_naver", False)
-            
-            # 해외주식 HTML 크롤링 불가 -> 강제 Reddit
-            if use_naver and not ticker.isdigit():
-                print(f"⚠️ [{stock['name']}] 네이버 PC 게시판 미지원 -> Reddit 전환")
-                use_naver = False
-
-            if use_naver:
+            if ticker.isdigit():
                 raw_posts = get_naver_posts(ticker, limit)
             else:
                 raw_posts = get_reddit_posts(ticker, limit)
                 
             if not raw_posts: 
-                print(f"⚠️ [{stock['name']}] 수집된 데이터가 없습니다 (0건).")
+                print(f"⚠️ [{stock['name']}] 데이터 없음 (0건).")
                 continue
             
-            # 2. 분석
-            vol_status, velocity = check_volume_spike(raw_posts, stock["avg_velocity"])
+            # [수정] check_volume_spike에 ticker를 전달하여 히스토리 관리
+            vol_status, velocity = check_volume_spike(stock["name"], raw_posts, stock["avg_velocity"])
             filtered_count = len(raw_posts)
             
             print(f"🤖 [{stock['name']}] 요약 중 ({filtered_count}건)...")
             key_sentences = summarize_with_llm(stock["name"], raw_posts)
-            
-            if not key_sentences: 
-                # [수정] 요약 실패해도 빈 껍데기는 만들지 않고 스킵 (로그는 위에서 출력됨)
-                continue
+            if not key_sentences: continue
             
             print(f"🧠 [{stock['name']}] 심층 분석 중...")
             final_data = analyze_final_sentiment(stock["name"], key_sentences)
@@ -322,7 +351,7 @@ def get_sentiment_analysis():
                 print(f"   -> ✅ 완료: {stock['name']}")
                 
         except Exception as e:
-            print(f"❌ [{stock.get('name')}] 처리 중 치명적 오류: {e}")
+            print(f"❌ [{stock.get('name')}] 오류: {e}")
             continue
             
     return results
