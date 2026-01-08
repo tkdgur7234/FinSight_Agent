@@ -5,7 +5,7 @@ import json
 import re
 from datetime import datetime
 from time import mktime
-from bs4 import BeautifulSoup  # HTML 파싱을 위해 추가
+from bs4 import BeautifulSoup
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -20,22 +20,16 @@ TARGET_STOCKS = [
         "name": "Tesla",
         "fetch_limit": 50,
         "avg_velocity": 10,
-        "use_naver": False   # 해외주식 -> Reddit 권장
+        "use_naver": False 
     },
     {
         "ticker": "005930",       
         "name": "삼성전자",
         "fetch_limit": 50,
         "avg_velocity": 20,
-        "use_naver": True    # 국내주식 -> Naver HTML 크롤링
-    },
-    {
-        "ticker": "GOOG.O",       
-        "name": "알파벳(구글)",
-        "fetch_limit": 30,    
-        "avg_velocity": 5,
-        "use_naver": False   # 해외주식은 네이버 HTML 게시판이 없으므로 False로 설정
+        "use_naver": True 
     }
+    # 구글(알파벳)은 요청대로 제외함
 ]
 
 MODEL_FAST = "solar-1-mini-chat"
@@ -44,6 +38,7 @@ MODEL_SMART = "solar-pro2"
 SPAM_KEYWORDS = ["crypto", "whatsapp", "telegram", "giveaway", "free", "discord", "리딩", "무료", "카톡", "band"]
 
 def clean_text(text):
+    # HTML 태그 제거 및 공백 정리
     text = re.sub(r'<[^>]+>', '', text)
     text = re.sub(r'\s+', ' ', text).strip()
     return text
@@ -136,25 +131,22 @@ def get_reddit_posts(ticker, limit):
 
 def get_naver_posts(code, limit):
     """
-    [완전 변경] 네이버 금융 PC 버전 HTML 크롤링 (API 미사용)
-    대상 URL: https://finance.naver.com/item/board.naver?code={code}
+    네이버 금융 PC 버전 HTML 크롤링
     """
     posts = []
     
-    # 1. 해외 주식 체크 (숫자가 아니면 지원 불가)
     if not code.isdigit():
-        print(f"⚠️ [Naver] 해외주식({code})은 PC HTML 게시판이 없어 크롤링 불가능합니다. (Reddit 사용 권장)")
+        print(f"⚠️ [Naver] 해외주식({code})은 지원하지 않습니다.")
         return []
 
     print(f"🔍 [Naver HTML] {code} PC 종토방 수집 시도...")
     
-    # PC 브라우저 User-Agent
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
 
     page = 1
-    max_page = 5 # 너무 많이 긁지 않도록 제한
+    max_page = 5 
     
     while len(posts) < limit and page <= max_page:
         try:
@@ -165,11 +157,13 @@ def get_naver_posts(code, limit):
                 print(f"   -> 페이지 접속 실패: {res.status_code}")
                 break
 
-            # 인코딩 설정 (한글 깨짐 방지)
-            res.encoding = 'cp949' 
-            soup = BeautifulSoup(res.text, 'html.parser')
-            
-            # 테이블 행 가져오기
+            # [인코딩 수정] 한글 깨짐 방지 (euc-kr)
+            try:
+                html_text = res.content.decode('euc-kr', 'replace')
+            except UnicodeDecodeError:
+                html_text = res.content.decode('utf-8', 'replace')
+                
+            soup = BeautifulSoup(html_text, 'html.parser')
             rows = soup.select("div.section.inner_sub table.type2 tbody tr")
             
             if not rows:
@@ -178,7 +172,6 @@ def get_naver_posts(code, limit):
             for row in rows:
                 if len(posts) >= limit: break
                 
-                # 마우스 오버 시 나오는 본문 미리보기 or 제목
                 title_tag = row.select_one("td.title a")
                 if not title_tag: continue
                 
@@ -186,7 +179,7 @@ def get_naver_posts(code, limit):
                 if not title:
                     title = title_tag.text.strip()
                 
-                # 날짜 추출 (YYYY.MM.DD HH:mm)
+                # 날짜 추출
                 date_tag = row.select_one("td:nth-of-type(6) span")
                 date_str = date_tag.text.strip() if date_tag else ""
                 
@@ -214,7 +207,14 @@ def summarize_with_llm(ticker, posts):
     api_key = os.getenv("UPSTAGE_API_KEY")
     client = OpenAI(api_key=api_key, base_url="https://api.upstage.ai/v1/solar")
 
-    context_text = "\n".join([f"- {p['text']}" for p in posts])
+    # [핵심 수정] 입력 텍스트 길이 제한 (과도한 토큰 방지)
+    # 50개 글을 다 합치면 너무 길어질 수 있으므로, 최대 3000자까지만 자릅니다.
+    full_content = "\n".join([f"- {p['text']}" for p in posts])
+    if len(full_content) > 3000:
+        full_content = full_content[:3000] + "...(truncated)"
+    
+    # 디버깅: 입력 길이 확인
+    # print(f"   -> LLM 입력 길이: {len(full_content)}자")
 
     system_prompt = f"""
     Filter out noise from the comments about {ticker}.
@@ -223,19 +223,22 @@ def summarize_with_llm(ticker, posts):
     """
 
     try:
+        # [수정] timeout 설정 추가 (20초)
         response = client.chat.completions.create(
             model=MODEL_FAST,
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": context_text}
+                {"role": "user", "content": full_content}
             ],
-            temperature=0.1
+            temperature=0.1,
+            timeout=20 
         )
         content = response.choices[0].message.content
         result = parse_json_safely(content)
         return result if isinstance(result, list) else []
     except Exception as e:
-        print(f"Summary Error: {e}")
+        # [수정] 에러 상세 출력
+        print(f"   -> ❌ 요약 실패 (LLM Error): {str(e)}")
         return []
 
 def analyze_final_sentiment(ticker, key_sentences):
@@ -261,12 +264,13 @@ def analyze_final_sentiment(ticker, key_sentences):
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": sentences_text}
             ],
-            temperature=0.1
+            temperature=0.1,
+            timeout=20
         )
         content = response.choices[0].message.content
         return parse_json_safely(content)
     except Exception as e:
-        print(f"Analysis Error: {e}")
+        print(f"   -> ❌ 분석 실패 (LLM Error): {str(e)}")
         return None
 
 def get_sentiment_analysis():
@@ -278,11 +282,11 @@ def get_sentiment_analysis():
             ticker = stock["ticker"]
             limit = stock["fetch_limit"]
             
-            # [수정] 사용자가 강제로 use_naver=True를 해도, 해외주식(문자 티커)은 HTML 크롤링 불가하므로 강제 Reddit 전환
             use_naver = stock.get("use_naver", False)
             
+            # 해외주식 HTML 크롤링 불가 -> 강제 Reddit
             if use_naver and not ticker.isdigit():
-                print(f"⚠️ [{stock['name']}] 네이버 HTML 크롤링은 국내주식(숫자코드)만 지원합니다. Reddit으로 전환합니다.")
+                print(f"⚠️ [{stock['name']}] 네이버 PC 게시판 미지원 -> Reddit 전환")
                 use_naver = False
 
             if use_naver:
@@ -302,7 +306,7 @@ def get_sentiment_analysis():
             key_sentences = summarize_with_llm(stock["name"], raw_posts)
             
             if not key_sentences: 
-                print(f"   -> 요약 실패 (LLM 응답 오류)")
+                # [수정] 요약 실패해도 빈 껍데기는 만들지 않고 스킵 (로그는 위에서 출력됨)
                 continue
             
             print(f"🧠 [{stock['name']}] 심층 분석 중...")
