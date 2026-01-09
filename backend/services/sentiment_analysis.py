@@ -23,6 +23,13 @@ TARGET_STOCKS = [
         "avg_velocity": 10, # 초기값 (데이터 없을 때 사용)
         "use_naver": False 
     },
+    {
+        "ticker": "RKLB",         
+        "name": "Rocket Lab",
+        "fetch_limit": 50,
+        "avg_velocity": 10, # 초기값 (데이터 없을 때 사용)
+        "use_naver": False 
+    },
     #{
     #   "ticker": "005930",       
     #    "name": "삼성전자",
@@ -36,7 +43,7 @@ MODEL_FAST = "solar-1-mini-chat"
 MODEL_SMART = "solar-pro2"
 HISTORY_FILE = "velocity_history.json"  # 속도 기록 저장 파일
 
-SPAM_KEYWORDS = ["crypto", "whatsapp", "telegram", "giveaway", "free", "discord", "리딩", "무료", "카톡", "band", "가입", "수익"]
+SPAM_KEYWORDS = ["whatsapp", "telegram", "giveaway", "free", "discord", "리딩", "무료", "카톡", "밴드", "가입", "고수익", "입장"]
 
 def clean_text(text):
     text = re.sub(r'<[^>]+>', '', text)
