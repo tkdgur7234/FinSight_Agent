@@ -4,6 +4,7 @@ from services.economy_indicators import get_economy_indicators
 from services.market_news_crawl_llm import get_market_news
 from services.email_builder import generate_email_report
 from services.sentiment_analysis import get_sentiment_analysis
+from services.stock_news import get_interested_stock_news
 
 router = APIRouter(
     prefix="/report",  # 이 라우터의 모든 주소 앞에 /report가 붙음
@@ -77,6 +78,18 @@ def fetch_sentiment_analysis():
     return {
         "status": "success",
         "data": data
+    }
+
+# 2-2. 관심 종목 뉴스 수집 엔드포인트
+@router.post("/stock-news")
+def fetch_stock_news():
+    """
+    2-2. 관심 종목(Target Stocks) 관련 최신 뉴스 수집
+    """
+    news_data = get_interested_stock_news()
+    return {
+        "status": "success",
+        "data": news_data
     }
 
 # 최종. 모든 데이터를 취합하여 완성된 HTML 이메일 본문 반환 엔드포인트
