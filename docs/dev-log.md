@@ -120,6 +120,9 @@ RSS에서 5개 기사를 가져오고 중복 걸러내고 남은 최상위 2개�
 정밀 시간 필터링 (한국 시간으로 어제 09시 ~ 오늘 09시까지)
 유료 뉴스 필터링 로직 추가 (블랙리스트 기능)
 
+(25-1-11)
+(1) 2-3. 관심 종목 이상 거래 감지 구체화 로직 설계중
+기능은 2가지. 관심 종목에 대하여 대규모 거래 감지, 주요 종목(나스닥, snp)에 관하여 내부자 거래 감시
 
 <img width="633" height="903" alt="image" src="https://github.com/user-attachments/assets/1fbfddba-7815-4450-9f2a-4b9c51319921" />
 <img width="639" height="829" alt="image" src="https://github.com/user-attachments/assets/9ba404bc-0b10-4627-8b97-f3e2e3767078" />
