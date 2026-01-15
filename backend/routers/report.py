@@ -5,6 +5,7 @@ from services.market_news_crawl_llm import get_market_news
 from services.email_builder import generate_email_report
 from services.sentiment_analysis import get_sentiment_analysis
 from services.stock_news import get_interested_stock_news
+from services.abnormal_trade import detect_whale_trades, detect_insider_trading
 
 router = APIRouter(
     prefix="/report",  # 이 라우터의 모든 주소 앞에 /report가 붙음
@@ -90,6 +91,26 @@ def fetch_stock_news():
     return {
         "status": "success",
         "data": news_data
+    }
+
+# 3-1. 대규모 거래 탐지 엔드포인트
+@router.post("/whale-watch")
+def report_whale_trades():
+    # 인자 없이 호출하면 파일 상단의 INTEREST_STOCKS 사용
+    data = detect_whale_trades() 
+    return {
+        "status": "success", 
+        "count": len(data), "data": data
+    }
+
+# 3-2. 내부자 거래 탐지 엔드포인트
+@router.post("/insider-watch")
+def report_insider_trades():
+    # 인자 없이 호출하면 파일 상단의 TARGET_INSIDER_TICKERS (Nasdaq+SNP) 사용
+    data = detect_insider_trading()
+    return {
+        "status": "success", 
+        "count": len(data), "data": data
     }
 
 # 최종. 모든 데이터를 취합하여 완성된 HTML 이메일 본문 반환 엔드포인트
