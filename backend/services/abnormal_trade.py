@@ -20,12 +20,12 @@ INTEREST_STOCKS = ["TSLA", "RKLB", "PLTR", "SOFI", "IONQ"]
 
 # 2. S&P 500 상위 20개
 SNP_TOP_20 = [
-    "AAPL"
+    "AAPL", "MSFT", "NVDA"
 ]
 
 # 3. NASDAQ 100
 NASDAQ_100 = [
-    "AAPL", "MSFT", "NVDA"
+    "IREN", "OKLO"
 ]
 TARGET_INSIDER_TICKERS = list(set(SNP_TOP_20 + NASDAQ_100))
 
