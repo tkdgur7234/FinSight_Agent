@@ -5,7 +5,7 @@ from services.market_news_crawl_llm import get_market_news
 from services.email_builder import generate_email_report
 from services.sentiment_analysis import get_sentiment_analysis
 from services.stock_news import get_interested_stock_news
-from services.whale_tracker import run_whale_tracker
+from services.whale_tracker import get_whale_tracker_data
 
 router = APIRouter(
     prefix="/report",  # 이 라우터의 모든 주소 앞에 /report가 붙음
@@ -103,7 +103,7 @@ def report_whale_frequency():
     2. Z-score > 2.0 검증
     3. DB 저장 및 빈도 분석 결과 반환
     """
-    data = run_whale_tracker()
+    data = get_whale_tracker_data()
     
     return {
         "status": "success",
