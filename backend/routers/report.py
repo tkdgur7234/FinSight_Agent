@@ -103,12 +103,14 @@ def report_whale_frequency():
     2. Z-score > 2.0 검증
     3. DB 저장 및 빈도 분석 결과 반환
     """
-    data = get_whale_tracker_data()
+    data = get_whale_tracker_data() # {stocks:..., etfs:...} 형태
     
+    total_count = len(data['stocks']) + len(data['etfs'])
+
     return {
         "status": "success",
-        "count": len(data),
-        "data": data
+        "count": total_count,
+        "data": data # 프론트엔드에서 data.stocks, data.etfs로 접근
     }
 
 # 최종. 모든 데이터를 취합하여 완성된 HTML 이메일 본문 반환 엔드포인트
