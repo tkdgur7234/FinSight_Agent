@@ -6,6 +6,7 @@ from services.email_builder import generate_email_report
 from services.sentiment_analysis import get_sentiment_analysis
 from services.stock_news import get_interested_stock_news
 from services.whale_tracker import get_whale_tracker_data
+from services.insider_tracker import get_insider_trades
 
 router = APIRouter(
     prefix="/report",  # 이 라우터의 모든 주소 앞에 /report가 붙음
@@ -111,6 +112,20 @@ def report_whale_frequency():
         "status": "success",
         "count": total_count,
         "data": data # 프론트엔드에서 data.stocks, data.etfs로 접근
+    }
+
+# 3-2. 내부자 거래 분석 엔드포인트
+@router.post("/insider-trades")
+def report_insider_trades():
+    data = get_insider_trades()
+    
+    # 전체 건수 계산
+    total_count = len(data['cluster_buys']) + len(data['significant_buys']) + len(data['significant_sells'])
+    
+    return {
+        "status": "success",
+        "count": total_count,
+        "data": data # 프론트엔드에서 data.cluster_buys 등으로 접근
     }
 
 # 최종. 모든 데이터를 취합하여 완성된 HTML 이메일 본문 반환 엔드포인트
