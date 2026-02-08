@@ -1,34 +1,29 @@
 import cloudscraper
 import pandas as pd
 import io
-import yfinance as yf  # [추가] 재무 데이터 확인용
-from datetime import datetime
+import yfinance as yf
+from datetime import datetime, timedelta
 import time
 import random
+from concurrent.futures import ThreadPoolExecutor, as_completed # [추가] 병렬 처리를 위함
 
 # ---------------------------------------------------------
-# [Setup]
-# pip install cloudscraper pandas yfinance
+# [설정] 필터링 기준 (USD)
 # ---------------------------------------------------------
+LOOKBACK_DAYS = 30              
 
-# [설정: 사용자 요청 기준 (USD 환산)]
-MIN_PRICE = 3.0                  # 주가 $3 이상 (약 4천원)
-MIN_TRADE_VALUE = 150000         # 매수금액 $150k 이상 (약 2.1억)
-MIN_MARKET_CAP = 250_000_000     # 시총 $250M 이상 (약 3,500억)
-MIN_DAILY_TURNOVER = 2_500_000   # 일 거래대금 $2.5M 이상 (약 35억)
+# Python 내부 정밀 필터 기준
+MIN_PRICE = 3.0                 # 주가 $3 이상
+MIN_MARKET_CAP = 250_000_000    # 시가총액 30억 이상
+MIN_DAILY_TURNOVER = 2_500_000  # 일 거래대금 30억 이상
 
-# [직급 가중치]
-ROLE_WEIGHTS = {
-    "CEO": 10, "Chief Executive Officer": 10,
-    "CFO": 10, "Chief Financial Officer": 10,
-    "COB": 8,  "Chairman": 8,
-    "Pres": 7, "President": 7,
-    "COO": 6,
-    "Dir": 5,  "Director": 5,
-    "VP": 4,   "Vice President": 4,
-    "Officer": 3,
-    "10%": 2   
-}
+# [매매 금액 기준]
+MIN_TRADE_VALUE_CLUSTER = 20000 # [cluster용] $2만 이상 매수에 내부자 3명 이상시 집단 매수로 인정
+MIN_TRADE_VALUE_REPORT = 100000 # [주요 매수] $10만 이상 매수
+MIN_SELL_VALUE_FILTER = 400000  # [매도] $400k 이상 매도만 감시
+
+# [병렬 처리 설정]
+MAX_WORKERS = 10 # 동시에 10개 종목씩 조회 (너무 높으면 차단될 수 있음)
 
 C_LEVEL_TITLES = ["CEO", "Chief Executive Officer", "CFO", "Chief Financial Officer", "President"]
 
@@ -38,83 +33,65 @@ def log(msg):
 def is_c_level(title):
     title_lower = str(title).lower()
     for c_title in C_LEVEL_TITLES:
-        if c_title.lower() in title_lower:
-            return True
+        if c_title.lower() in title_lower: return True
     return False
 
-def get_role_weight(titles):
-    max_weight = 1
-    titles_lower = str(titles).lower()
-    for role, weight in ROLE_WEIGHTS.items():
-        if role.lower() in titles_lower:
-            max_weight = max(max_weight, weight)
-    return max_weight
-
-# [신규 기능] yfinance로 시총 및 거래대금 검증
-def check_financial_health(ticker):
+# [재무 검증 - 단일 종목용]
+def check_financial_health_single(ticker):
     try:
-        # yfinance로 데이터 조회
         stock = yf.Ticker(ticker)
-        info = stock.info
         
-        # 1. 시가총액 (marketCap)
-        market_cap = info.get('marketCap', 0)
-        if market_cap < MIN_MARKET_CAP:
-            return False, f"시총 미달 (${market_cap/1_000_000:.1f}M)"
+        # 네트워크 호출 발생 (가장 시간 많이 먹는 부분)
+        try:
+            info = stock.fast_info
+            market_cap = info.market_cap
+        except:
+            return ticker, False, "데이터 조회 불가"
 
-        # 2. 거래대금 (Volume * Price)
-        # avgVolume(3개월 평균) 사용하거나 volume(당일) 사용
-        avg_vol = info.get('averageVolume', 0)
-        curr_price = info.get('currentPrice', 0)
-        
-        # 데이터가 없을 경우 안전하게 0 처리
-        if avg_vol is None: avg_vol = 0
-        if curr_price is None: curr_price = 0
-        
-        daily_turnover = avg_vol * curr_price
-        
-        if daily_turnover < MIN_DAILY_TURNOVER:
-            return False, f"거래대금 미달 (${daily_turnover/1_000_000:.1f}M)"
+        if market_cap is None or market_cap < MIN_MARKET_CAP:
+            return ticker, False, "시총 미달"
 
-        return True, "Pass"
+        try:
+            last_vol = info.last_volume
+            last_price = info.last_price
+            if last_vol is None: last_vol = 0
+            if last_price is None: last_price = 0
+            
+            turnover = last_vol * last_price
+            if turnover < MIN_DAILY_TURNOVER:
+                return ticker, False, "거래대금 미달"
+        except:
+            return ticker, False, "거래정보 없음"
 
-    except Exception as e:
-        # yfinance 데이터가 없는 경우(ETF나 소형주 등)는 보수적으로 False 처리
-        # 또는 정말 중요한 정보라면 True로 넘길 수도 있음. 여기선 엄격하게 False.
-        return False, f"데이터 조회 불가 ({e})"
+        return ticker, True, "Pass"
+    except Exception:
+        return ticker, False, "조회 에러"
 
 def get_insider_trades():
-    log(f"🕵️‍♂️ [Insider Tracker] 정밀 분석 시작 (기준: 매수${MIN_TRADE_VALUE/1000}k+, 시총${MIN_MARKET_CAP/1000000}M+)")
-
+    cutoff_date = datetime.now() - timedelta(days=LOOKBACK_DAYS)
+    log(f"🕵️‍♂️ [Insider Tracker] 정밀 분석 시작 (병렬 처리 모드)...")
+    
     scraper = cloudscraper.create_scraper()
     base_url = "http://openinsider.com/screener"
     
-    # 파라미터: 2000건, 최근 30일
-    params = {
-        'cnt': 2000,
-        'ph': 1, 'isc': 1,
-        'daysago': 30,
-        'xp': 1, 'xs': 1,
-        'sortcol': 0, 
-    }
+    # Raw Data 요청
+    params = {'cnt': 5000, 'xp': 1, 'xs': 1, 'isc': 1}
 
     try:
         log("   📡 OpenInsider 데이터 요청 중...")
         res = scraper.get(base_url, params=params)
         
         if res.status_code != 200:
-            log(f"   ⚠️ 접속 실패 (Status: {res.status_code})")
+            log(f"   ⚠️ 접속 실패: {res.status_code}")
             return empty_result()
 
         try:
             dfs = pd.read_html(io.StringIO(res.text), header=0)
-        except ValueError:
-            return empty_result()
+        except ValueError: return empty_result()
 
         if not dfs: return empty_result()
         
         # 테이블 찾기
-        df = None
         candidate_tables = []
         for table in dfs:
             clean_cols = [str(c).replace('\n', '').replace('\xa0', ' ').strip() for c in table.columns]
@@ -124,62 +101,135 @@ def get_insider_trades():
         
         if not candidate_tables: return empty_result()
         df = max(candidate_tables, key=len)
-        log(f"   ✅ 데이터 확보 완료 (총 {len(df)}건). 2차 정밀 필터링 시작...")
+        log(f"   ✅ 원본 데이터 확보 (총 {len(df)}건).")
+
+        # 날짜 필터링
+        date_col = next((c for c in df.columns if 'Filing' in c and 'Date' in c), 'Filing Date')
+        df['dt_parsed'] = pd.to_datetime(df[date_col], errors='coerce')
+        df = df.sort_values(by='dt_parsed', ascending=False)
+        df_filtered = df[df['dt_parsed'] >= cutoff_date].copy()
+        
+        if df_filtered.empty:
+            log("   ⚠️ 최근 데이터 없음.")
+            return empty_result()
+
+        newest = df_filtered['dt_parsed'].max().strftime('%Y-%m-%d')
+        oldest = df_filtered['dt_parsed'].min().strftime('%Y-%m-%d')
+        log(f"   📅 [기간 확정] {newest} ~ {oldest} (총 {len(df_filtered)}건)")
 
         # -----------------------------------------------------------
-        # [분석 로직]
+        # [Step 1] 1차 필터링 및 재무 검증 대상(Target) 식별
         # -----------------------------------------------------------
-        cluster_candidates = {} 
+        log("   🔍 1차 필터링 및 재무 검증 대상 추출 중...")
         
-        # 컬럼 매핑
         type_col = next((c for c in df.columns if 'Trade' in c and 'Type' in c), 'Trade Type')
         ticker_col = 'Ticker'
         insider_col = next((c for c in df.columns if 'Insider' in c), 'Insider Name')
         val_col = next((c for c in df.columns if 'Value' in c), 'Value')
         price_col = next((c for c in df.columns if 'Price' in c), 'Price')
 
-        # 1. Cluster Buy 후보군 계산 (매수 행위 자체는 소액이어도 카운팅? -> 아니오, 이번엔 엄격하게)
-        # 사용자 요청: "매수 금액도 2억 넘어야 함". 따라서 Cluster 후보도 2억 넘는 사람만 카운트.
-        for _, row in df.iterrows():
+        # Cluster 후보 계산
+        cluster_candidates = {} 
+        for _, row in df_filtered.iterrows():
             trade_type = str(row.get(type_col, ''))
-            
-            # Sale+OE 제외
             if 'Purchase' in trade_type and 'OE' not in trade_type:
-                # 금액 확인
                 val_str = str(row.get(val_col, '0')).replace('$','').replace(',','').replace('+','').strip()
-                try: value = float(val_str)
-                except: value = 0.0
-                
-                # [Cluster 조건 강화] 2억($150k) 넘는 매수만 "의미 있는 매수자"로 인정
-                if value >= MIN_TRADE_VALUE:
+                try: val = float(val_str)
+                except: val = 0.0
+                if val >= MIN_TRADE_VALUE_CLUSTER:
                     ticker = str(row.get(ticker_col, ''))
                     insider = str(row.get(insider_col, ''))
-                    if ticker not in cluster_candidates:
-                        cluster_candidates[ticker] = set()
+                    if ticker not in cluster_candidates: cluster_candidates[ticker] = set()
                     cluster_candidates[ticker].add(insider)
 
-        # 2. 리포팅 (최신 100건)
-        latest_df = df.head(100)
+        # 재무 검사가 필요한 '유니크한' 티커 목록 추출
+        tickers_to_check = set()
         
+        # 1차 필터링을 미리 시뮬레이션해서 yfinance 호출할 놈만 추림
+        for _, row in df_filtered.iterrows():
+            trade_type = str(row.get(type_col, ''))
+            if 'OE' in trade_type: continue
+            
+            is_purchase = 'Purchase' in trade_type
+            is_sale = 'Sale' in trade_type
+            if not (is_purchase or is_sale): continue
+
+            val_str = str(row.get(val_col, '0')).replace('$','').replace(',','').replace('+','').strip()
+            try: value = float(val_str)
+            except: value = 0.0
+
+            price_str = str(row.get(price_col, '0')).replace('$','').strip()
+            try: price = float(price_str)
+            except: price = 0.0
+
+            # 1차 필터: 동전주 / 금액 미달
+            if price < MIN_PRICE: continue
+            
+            # 금액 체크
+            ticker = str(row.get(ticker_col, ''))
+            is_cluster = False
+            if ticker in cluster_candidates and len(cluster_candidates[ticker]) >= 3:
+                is_cluster = True
+
+            pass_value = False
+            if is_sale:
+                if value >= MIN_SELL_VALUE_FILTER: pass_value = True
+            else: # 매수
+                if is_cluster:
+                    if value >= MIN_TRADE_VALUE_CLUSTER: pass_value = True
+                else:
+                    title_col = next((c for c in df.columns if 'Title' in c), 'Title')
+                    is_c_lvl = is_c_level(str(row.get(title_col, '')))
+                    if value >= MIN_TRADE_VALUE_REPORT or is_c_lvl: pass_value = True
+            
+            # 1차 통과 + 매수 포지션인 경우에만 재무 확인 필요
+            if pass_value and is_purchase:
+                tickers_to_check.add(ticker)
+
+        log(f"   ⚡ 재무 검증이 필요한 종목: {len(tickers_to_check)}개 (병렬 처리 시작)")
+
+        # -----------------------------------------------------------
+        # [Step 2] 병렬 처리 (Multi-threading)로 재무 데이터 일괄 수집
+        # -----------------------------------------------------------
+        financial_cache = {} # {ticker: (is_healthy, reason)}
+        
+        if tickers_to_check:
+            with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+                # 작업 제출
+                future_to_ticker = {executor.submit(check_financial_health_single, t): t for t in tickers_to_check}
+                
+                # 결과 수집
+                completed_cnt = 0
+                for future in as_completed(future_to_ticker):
+                    ticker, is_healthy, reason = future.result()
+                    financial_cache[ticker] = is_healthy
+                    
+                    completed_cnt += 1
+                    if completed_cnt % 10 == 0:
+                        print(f"      ... 재무 데이터 수집 중 ({completed_cnt}/{len(tickers_to_check)}) ...", flush=True)
+
+        log("   ✅ 재무 데이터 수집 완료. 최종 리포트 생성 중...")
+
+        # -----------------------------------------------------------
+        # [Step 3] 최종 조립 (메인 루프)
+        # -----------------------------------------------------------
         cluster_buys = []
         significant_buys = []
         significant_sells = []
         
-        # yfinance 캐싱 (중복 호출 방지)
-        checked_tickers = {} # {ticker: bool}
+        stats = {'skip_oe': 0, 'skip_penny': 0, 'skip_amt': 0, 'skip_fin': 0, 'valid': 0}
 
-        stats = {'oe': 0, 'penny': 0, 'small_money': 0, 'bad_financial': 0, 'valid': 0}
-
-        for index, row in latest_df.iterrows():
+        for index, row in df_filtered.iterrows():
             try:
                 trade_type = str(row.get(type_col, ''))
-                
-                # [필터] Sale+OE 제거
-                if 'OE' in trade_type: 
-                    stats['oe'] += 1
+                if 'OE' in trade_type:
+                    stats['skip_oe'] += 1
                     continue
+                
+                is_purchase = 'Purchase' in trade_type
+                is_sale = 'Sale' in trade_type
+                if not (is_purchase or is_sale): continue
 
-                # 값 파싱
                 val_str = str(row.get(val_col, '0')).replace('$','').replace(',','').replace('+','').strip()
                 try: value = float(val_str)
                 except: value = 0.0
@@ -188,56 +238,51 @@ def get_insider_trades():
                 try: price = float(price_str)
                 except: price = 0.0
 
-                is_purchase = 'Purchase' in trade_type
-                is_sale = 'Sale' in trade_type
-
-                if not (is_purchase or is_sale): continue
-
-                # [필터 1] 금액 필터 ($150k / $500k)
-                min_val = MIN_TRADE_VALUE if is_purchase else MIN_SELL_VALUE_FILTER
-                if value < min_val:
-                    stats['small_money'] += 1
-                    continue
-
-                # [필터 2] 주가 필터 ($3 미만 제외)
                 if price < MIN_PRICE:
-                    stats['penny'] += 1
+                    stats['skip_penny'] += 1
                     continue
 
-                # [필터 3] 재무 건전성 (시총 & 거래대금) - yfinance
-                # 매수(Buy)인 경우에만 엄격하게 체크 (매도는 탈출일 수 있으니 굳이 우량주 아니어도 됨)
                 ticker = str(row.get(ticker_col, ''))
                 
-                if is_purchase:
-                    if ticker not in checked_tickers:
-                        # yfinance 호출 (약간의 딜레이 발생 가능)
-                        is_healthy, reason = check_financial_health(ticker)
-                        checked_tickers[ticker] = is_healthy
-                        if not is_healthy:
-                             # log(f"      [탈락] {ticker}: {reason}")
-                             pass
-                    
-                    if not checked_tickers[ticker]:
-                        stats['bad_financial'] += 1
-                        continue
-
-                # 데이터 정리
-                insider = str(row.get(insider_col, ''))
-                title_col = next((c for c in df.columns if 'Title' in c), 'Title')
-                titles = str(row.get(title_col, ''))
-                date_col = next((c for c in df.columns if 'Trade' in c and 'Date' in c), 'Trade Date')
-                date_str = str(row.get(date_col, '')).split(' ')[0]
-
-                role_weight = get_role_weight(titles)
-                is_c_lvl = is_c_level(titles)
-
-                # Cluster Check
                 is_cluster = False
                 buyer_count = 0
                 if ticker in cluster_candidates:
                     buyer_count = len(cluster_candidates[ticker])
-                    if buyer_count >= 3:
-                        is_cluster = True
+                    if buyer_count >= 3: is_cluster = True
+
+                # 금액 필터
+                pass_value = False
+                if is_sale:
+                    if value >= MIN_SELL_VALUE_FILTER: pass_value = True
+                else:
+                    if is_cluster:
+                        if value >= MIN_TRADE_VALUE_CLUSTER: pass_value = True
+                    else:
+                        title_col = next((c for c in df.columns if 'Title' in c), 'Title')
+                        titles = str(row.get(title_col, ''))
+                        is_c_lvl = is_c_level(titles)
+                        if value >= MIN_TRADE_VALUE_REPORT or is_c_lvl: pass_value = True
+                
+                if not pass_value:
+                    stats['skip_amt'] += 1
+                    continue
+
+                # 재무 필터 (캐시 사용)
+                if is_purchase:
+                    # 캐시에 없으면(위에서 누락됐거나 에러난 경우) False 처리
+                    is_healthy = financial_cache.get(ticker, False)
+                    if not is_healthy:
+                        stats['skip_fin'] += 1
+                        continue
+
+                stats['valid'] += 1
+
+                # 데이터 담기
+                insider = str(row.get(insider_col, ''))
+                title_col = next((c for c in df.columns if 'Title' in c), 'Title')
+                titles = str(row.get(title_col, ''))
+                date_str = row['dt_parsed'].strftime('%Y-%m-%d')
+                is_c_lvl = is_c_level(titles)
 
                 trade_data = {
                     "ticker": ticker,
@@ -253,19 +298,15 @@ def get_insider_trades():
                     "cluster_count": buyer_count
                 }
 
-                # 분류 및 담기
                 if is_purchase:
-                    stats['valid'] += 1
                     if is_cluster:
                         cluster_buys.append(trade_data)
                     else:
                         significant_buys.append(trade_data)
                 elif is_sale:
-                    stats['valid'] += 1
                     significant_sells.append(trade_data)
 
-            except Exception as e:
-                continue
+            except Exception: continue
 
         # 정렬
         cluster_buys.sort(key=lambda x: x['value'], reverse=True)
@@ -273,7 +314,12 @@ def get_insider_trades():
         significant_sells.sort(key=lambda x: x['value'], reverse=True)
 
         log(f"✅ 분석 완료. 👑Cluster: {len(cluster_buys)}, 💎Buy: {len(significant_buys)}, 📉Sell: {len(significant_sells)}")
-        log(f"   ℹ️ 필터링: 소액 {stats['small_money']}, 동전주 {stats['penny']}, 시총/거래량미달 {stats['bad_financial']}, 유효 {stats['valid']}")
+        log(f"📊 상세 필터링 통계:")
+        log(f"   - 🟡 옵션 행사 (OE): {stats['skip_oe']}")
+        log(f"   - 🪙 동전주 (<${MIN_PRICE}): {stats['skip_penny']}")
+        log(f"   - 💸 금액 미달: {stats['skip_amt']}")
+        log(f"   - 📉 재무 미달: {stats['skip_fin']}")
+        log(f"   - ✅ 최종 통과: {stats['valid']}")
         
         return {
             "cluster_buys": cluster_buys,
