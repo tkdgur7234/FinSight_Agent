@@ -120,11 +120,11 @@ pip install -r requirements.txt
 4. ".env" 환경변수 파일 생성  
 api 키 입력  
 5. 서버 실행  
-- uvicorn main:app --reload
-- (-> http://127.0.0.1:8000)
-- or 
-- uvicorn main:app --reload --host 0.0.0.0
-- (-> http://0.0.0.0:8000)
+> uvicorn main:app --reload
+> (-> http://127.0.0.1:8000)
+> or 
+> uvicorn main:app --reload --host 0.0.0.0
+> (-> http://0.0.0.0:8000)
 
 ----------------------------
 
