@@ -121,6 +121,10 @@ pip install -r requirements.txt
 api 키 입력  
 5. 서버 실행  
 uvicorn main:app --reload
+(-> http://127.0.0.1:8000)
+or 
+uvicorn main:app --reload --host 0.0.0.0
+(-> http://0.0.0.0:8000)
 
 ----------------------------
 
