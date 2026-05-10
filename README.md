@@ -59,7 +59,7 @@
 my-stock-portfolio/
 ├── backend/               # Python 서버 (FastAPI)
 │   ├── main.py            # 메인 서버 코드
-│   ├── routers/           
+│   ├── routers/
 │   ├── services/          # 각종 기능 구현 코드
 │   ├── templates/         # 웹 시각화 html
 │   ├── requirements.txt   # 라이브러리 목록

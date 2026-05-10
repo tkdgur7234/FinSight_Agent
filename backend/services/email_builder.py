@@ -1,14 +1,19 @@
-# backend/services/email_builder.py
-
 import os
 import markdown
 from datetime import datetime, timedelta
 import pytz # 시간대 처리를 위해 추가
 from jinja2 import Environment, FileSystemLoader
 
+# 1번 기능 Imports
 from services.briefing_market_index import get_market_summary_markdown, get_sp500_map_image
 from services.economy_indicators import get_economy_indicators
 from services.market_news_crawl_llm import get_market_news
+
+# 2, 3번 기능 Imports 추가
+from services.sentiment_analysis import get_sentiment_analysis
+from services.stock_news import get_interested_stock_news
+from services.whale_tracker import get_whale_tracker_data
+from services.insider_tracker import get_insider_trades
 
 def generate_email_report():
     print("💌 리포트 생성 시작...")
@@ -26,7 +31,6 @@ def generate_email_report():
     print("Fetching Economy Data...")
     raw_economy_data = get_economy_indicators()
     
-    # --- [수정] 날짜 필터링 로직 추가 ---
     # 한국 시간 기준 '어제' 날짜 구하기
     kst_tz = pytz.timezone('Asia/Seoul')
     now_kst = datetime.now(kst_tz)
@@ -38,12 +42,10 @@ def generate_email_report():
     economy_data = []
     if raw_economy_data:
         for item in raw_economy_data:
-            # item['필터링(전일 발표)'] 값이 어제 날짜와 같은지 확인
             if item.get("필터링(전일 발표)") == target_date_str:
                 economy_data.append(item)
-    # ----------------------------------
 
-    # [1-4] 뉴스
+    # [1-4] 일반 시장 뉴스
     print("Crawling News...")
     news_result = get_market_news()
     
@@ -54,7 +56,29 @@ def generate_email_report():
         market_summary = "뉴스 데이터를 가져오지 못했습니다."
         news_list = []
 
-    # 2. Jinja2 템플릿 로드
+    # --- [추가] 2번 기능: 관심 종목 모니터링 ---
+    print("Fetching Sentiment Analysis...")
+    watchlist_sentiments = get_sentiment_analysis()
+
+    print("Fetching Stock News...")
+    watchlist_news = get_interested_stock_news()
+
+    # --- [추가] 3번 기능: 이상 거래 감지 ---
+    print("Tracking Whale Trades...")
+    raw_whale_data = get_whale_tracker_data()
+    
+    # HTML 템플릿 구조에 맞게 stocks와 etfs를 하나의 리스트로 통합
+    whale_list = []
+    if raw_whale_data:
+        whale_list.extend(raw_whale_data.get('stocks', []))
+        whale_list.extend(raw_whale_data.get('etfs', []))
+
+    print("Tracking Insider Trades...")
+    insider_trades = get_insider_trades()
+
+    print("✅ 데이터 수집 완료! HTML 렌더링 시작...")
+
+    # Jinja2 템플릿 로드
     template_dir = os.path.join(os.path.dirname(__file__), '../templates')
     
     try:
@@ -64,17 +88,22 @@ def generate_email_report():
         print(f"❌ Template Loading Error: {e}")
         return f"<h1>Template Error</h1><p>{str(e)}</p>"
 
-    # 3. 렌더링
+    # 렌더링
     today_str = now_kst.strftime("%Y년 %m월 %d일 (%a)") # KST 기준 날짜 표시
     
+    # HTML 템플릿의 {{ 변수명 }}과 정확히 일치하도록 매핑
     rendered_html = template.render(
         today_date=today_str,
         market_summary=market_summary,
         market_table_html=html_table,
         sp500_image=sp500_img,
-        news_list=news_list,
-        economy_list=economy_data # 필터링된 데이터 전달
+        economy_list=economy_data,
+        market_news_list=news_list,           # HTML의 {{ market_news_list }}에 대응
+        watchlist_sentiments=watchlist_sentiments, # 2-1
+        watchlist_news=watchlist_news,             # 2-2
+        whale_alerts=whale_list,                   # 3-1
+        insider_trades=insider_trades              # 3-2
     )
     
-    print("✅ 리포트 생성 완료!")
+    print("✅ 리포트 생성 및 렌더링 완료!")
     return rendered_html

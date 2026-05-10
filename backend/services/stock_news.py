@@ -230,13 +230,16 @@ def analyze_news_sentiment(stock_name, news_list):
                 item["sentiment"] = ai_data.get("sentiment", "⚪ 중립")
                 item["importance"] = ai_data.get("importance", 1)
                 
-                if item.get("title") != ai_data.get("korean_title"):
-                     item["display_title"] = ai_data.get("korean_title", item["title"])
+                # [수정] HTML 템플릿이 읽을 수 있도록 번역된 제목을 'title'에 바로 덮어씌웁니다.
+                korean_title = ai_data.get("korean_title")
+                processed_title = ai_data.get("processed_title")
+                
+                if korean_title and korean_title != item["title"]:
+                    item["title"] = korean_title
                 else:
-                     item["display_title"] = ai_data.get("processed_title", item["title"])
+                    item["title"] = processed_title or item["title"]
             else:
                 item["sentiment"] = "⚪ 중립"
-                item["display_title"] = item["title"]
                 
         return news_list
 
@@ -249,7 +252,7 @@ def get_interested_stock_news():
     메인 실행 함수
     """
     print("📰 관심 종목 뉴스 수집 및 AI 분석 시작...")
-    results = []
+    results = [] # [수정] HTML이 읽기 쉽도록 1차원 리스트로 구성
 
     for stock in TARGET_STOCKS:
         ticker = stock["ticker"]
@@ -265,16 +268,9 @@ def get_interested_stock_news():
         # 2. AI 분석
         if raw_news:
             analyzed_news = analyze_news_sentiment(name, raw_news)
-            results.append({
-                "ticker": ticker,
-                "name": name,
-                "news": analyzed_news
-            })
-        else:
-             results.append({
-                "ticker": ticker,
-                "name": name,
-                "news": [] 
-            })
+            # [수정] 결과를 평탄화(Flatten)하여 추가
+            for item in analyzed_news:
+                item["ticker"] = ticker # 티커 정보를 각 뉴스 항목에 직접 주입
+                results.append(item)
     
     return results

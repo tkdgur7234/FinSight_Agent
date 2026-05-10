@@ -19,14 +19,14 @@ TARGET_STOCKS = [
     {
         "ticker": "TSLA",         
         "name": "Tesla",
-        "fetch_limit": 50,
+        "fetch_limit": 100,
         "avg_velocity": 10, # 초기값 (데이터 없을 때 사용)
         "use_naver": False 
     },
     {
         "ticker": "RKLB",         
         "name": "Rocket Lab",
-        "fetch_limit": 50,
+        "fetch_limit": 100,
         "avg_velocity": 10, # 초기값 (데이터 없을 때 사용)
         "use_naver": False 
     },
@@ -285,19 +285,38 @@ def summarize_with_llm(ticker, posts):
     if len(full_content) > 3000:
         full_content = full_content[:3000] + "...(truncated)"
 
+    # [수정] 프롬프트 엄격화: 전체 번역 금지, 1줄 요약 강제
     system_prompt = f"""
-    Filter out noise from the comments about {ticker}.
-    Select exactly **10 most meaningful sentences/titles**.
-    Output format must be a pure JSON list: ["Opinion 1", "Opinion 2"]
+    Analyze the comments about {ticker}.
+    Select exactly 10 most meaningful points.
+    
+    CRITICAL RULES:
+    1. Do NOT translate the whole post. SUMMARIZE each point into just ONE short Korean sentence.
+    2. Output format MUST be a pure, valid JSON array of strings. Do not add any conversational text.
+    
+    Example format:
+    ["테슬라 자율주행 기술에 대한 혼란이 가중되고 있습니다.", "단기 옵션 매도 시점에 대한 투자자들의 후회가 많습니다."]
     """
     try:
         response = client.chat.completions.create(
             model=MODEL_FAST,
             messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": full_content}],
-            temperature=0.1, timeout=30
+            temperature=0.1, 
+            timeout=30,
+            max_tokens=1500 # [핵심] 텍스트가 도중에 잘리지 않도록 여유 토큰 부여
         )
-        return parse_json_safely(response.choices[0].message.content) or []
-    except:
+        
+        raw_content = response.choices[0].message.content
+        parsed_data = parse_json_safely(raw_content)
+        
+        # 디버깅: 실패 시 원본을 보여줌
+        if not parsed_data:
+            print(f"   ⚠️ [Debug] {ticker} 파싱 실패. LLM 원본 응답:\n{raw_content[:200]}...")
+            return []
+            
+        return parsed_data
+    except Exception as e:
+        print(f"   ❌ LLM API Error ({ticker}): {e}")
         return []
 
 def analyze_final_sentiment(ticker, key_sentences):

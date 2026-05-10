@@ -10,9 +10,8 @@ import io
 import numpy as np
 
 # ---------------------------------------------------------
-# [Memory] 패키지 추가 시: pip freeze > requirements.txt
+# [설정] DB 경로 및 휴장일
 # ---------------------------------------------------------
-
 DB_PATH = "whale_tracker.db"
 if __name__ == "__main__":
     DB_PATH = "../whale_tracker.db" if os.path.exists("../whale_tracker.db") else "whale_tracker.db"
@@ -40,6 +39,7 @@ def get_frequency(ticker):
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
+        # 오늘 포함 최근 7일, 30일 데이터 조회
         date_7 = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
         date_30 = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
         
@@ -56,9 +56,6 @@ def save_whale_event(data):
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        
-        # [DB 스키마 변경] rel_volume 컬럼 삭제됨
-        # 만약 "no column named rel_volume" 에러가 나면 기존 db 파일을 삭제해주세요.
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS daily_whale (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,7 +68,6 @@ def save_whale_event(data):
                 UNIQUE(ticker, date)
             )
         ''')
-
         cursor.execute('''
             INSERT OR IGNORE INTO daily_whale 
             (ticker, date, price, volume, z_score, is_whale_day)
@@ -86,38 +82,25 @@ def save_whale_event(data):
         log(f"   ⚠️ DB 저장 에러: {e}")
 
 def calculate_metrics(ticker, today_vol):
-    """
-    yfinance를 이용해 Z-score만 계산 (Rel Volume 삭제)
-    Returns: z_score
-    """
     try:
         stock = yf.Ticker(ticker)
         hist = stock.history(period="1y")
-        
         if len(hist) < 60: return 0.0
         
         past_data = hist[:-1]
-        
-        # Z-score (1년 기준)
         mean_vol_1y = past_data['Volume'].mean()
         std_vol_1y = past_data['Volume'].std()
         
         z_score = 0.0
         if std_vol_1y > 0:
             z_score = (today_vol - mean_vol_1y) / std_vol_1y
-            
         return float(round(z_score, 2))
     except:
         return 0.0
 
 def get_whale_tracker_data():
-    log("🐋 [Whale Tracker] 1차 필터(Finviz) + 2차 검증(Z-score only) 시작...")
+    log("🐋 [Whale Tracker] 데이터 수집 및 Z-score 분류 시작...")
     
-    # DB 파일 삭제 안내
-    if os.path.exists(DB_PATH):
-        # 스키마가 변경되었으므로 체크 (이 부분은 수동으로 파일 삭제를 권장)
-        pass
-
     report_date = get_target_report_date()
     log(f"   📅 분석 기준일: {report_date}")
 
@@ -126,8 +109,8 @@ def get_whale_tracker_data():
         'Referer': 'https://finviz.com/screener.ashx'
     }
     
-    stock_results = []
-    etf_results = []
+    whale_alerts = []   # Z-score >= 2.0
+    normal_alerts = []  # Z-score < 2.0
     seen_tickers = set()
 
     TARGETS = [
@@ -137,106 +120,71 @@ def get_whale_tracker_data():
     ]
 
     for target_name, filter_code in TARGETS:
-        log(f"\n   🔍 [{target_name}] 그룹 스캔 중... (거래량 순)")
-        
+        log(f"\n   🔍 [{target_name}] 그룹 스캔 중...")
         max_scan = 61 if "All" in target_name else 41
-        etf_count_in_group = 0
         
-        # o=-volume: 거래량 내림차순 정렬 (Rel Volume 아님)
         for start_row in range(1, max_scan, 20):
             url = f"https://finviz.com/screener.ashx?v=111&f={filter_code},sh_relvol_o1.5&ft=4&o=-volume&r={start_row}"
-            
             try:
                 res = requests.get(url, headers=headers, timeout=10)
-                
-                try:
-                    all_tables = pd.read_html(io.StringIO(res.text), header=0)
-                except ValueError: continue
-
+                all_tables = pd.read_html(io.StringIO(res.text), header=0)
                 candidate_tables = [t for t in all_tables if 'Ticker' in t.columns]
                 if not candidate_tables: continue
                 df = max(candidate_tables, key=len)
 
-                for index, row in df.iterrows():
-                    ticker = ""
-                    industry = ""
-                    price = 0.0
-                    volume = 0
-                    
+                for _, row in df.iterrows():
                     try:
                         ticker = str(row['Ticker'])
-                        
                         if ticker in seen_tickers: continue
-                        
-                        industry = str(row.get('Industry', ''))
-                        is_etf = "Exchange Traded Fund" in industry
-
-                        if is_etf and etf_count_in_group >= 10:
-                            continue
-
                         seen_tickers.add(ticker)
-                        if is_etf: etf_count_in_group += 1
 
+                        industry = str(row.get('Industry', 'Unknown'))
                         price = float(str(row.get('Price', 0)))
-                        
                         vol_str = str(row.get('Volume', '0'))
                         if 'M' in vol_str: volume = int(float(vol_str.replace('M','')) * 1_000_000)
                         elif 'B' in vol_str: volume = int(float(vol_str.replace('B','')) * 1_000_000_000)
                         elif 'K' in vol_str: volume = int(float(vol_str.replace('K','')) * 1_000)
                         else: volume = int(vol_str)
 
+                        # Z-score 계산
+                        z_score = calculate_metrics(ticker, volume)
+                        
+                        weekly_freq, monthly_freq = 0, 0
+                        if z_score >= 2.0:
+                            data = {'ticker': ticker, 'date': report_date, 'price': price,
+                                    'volume': volume, 'z_score': z_score}
+                            save_whale_event(data)
+                            weekly_freq, monthly_freq = get_frequency(ticker)
+                            log(f"      🚨 [고래포착] {ticker} (Z:{z_score})")
+
+                        item_data = {
+                            "ticker": ticker,
+                            "industry": industry.replace("Exchange Traded Fund", "ETF"),
+                            "z_score": z_score,
+                            "weekly_freq": weekly_freq,
+                            "monthly_freq": monthly_freq
+                        }
+
+                        if z_score >= 2.0:
+                            whale_alerts.append(item_data)
+                        else:
+                            normal_alerts.append(item_data)
+
                     except: continue
-
-                    # Z-score만 계산
-                    z_score = calculate_metrics(ticker, volume)
-                    
-                    is_real_whale = bool(z_score >= 2.0)
-                    weekly_freq, monthly_freq = 0, 0
-                    msg_icon = "⚪"
-                    
-                    if is_real_whale:
-                        # rel_volume 필드 제거됨
-                        data = {'ticker': ticker, 'date': report_date, 'price': price,
-                                'volume': volume, 'z_score': z_score}
-                        save_whale_event(data)
-                        weekly_freq, monthly_freq = get_frequency(ticker)
-                        msg_icon = "🔥"
-                        log(f"      🚨 [포착] {ticker} (Z:{z_score}) - {industry}")
-
-                    item_data = {
-                        "ticker": str(ticker),
-                        "group": str(target_name),
-                        "industry": str(industry),
-                        "date": str(report_date),
-                        "price": f"${price}",
-                        "volume": f"{volume:,}",
-                        # rel_volume 제거
-                        "z_score": float(z_score),
-                        "is_whale": bool(is_real_whale),
-                        "weekly_freq": int(weekly_freq),
-                        "monthly_freq": int(monthly_freq),
-                        "msg": f"{msg_icon} {ticker}"
-                    }
-
-                    if is_etf:
-                        etf_results.append(item_data)
-                    else:
-                        stock_results.append(item_data)
-                
-                time.sleep(random.uniform(2, 4))
-
+                time.sleep(random.uniform(1, 2))
             except Exception as e:
                 log(f"   ⚠️ 에러 ({target_name}): {e}")
                 break
     
-    stock_results.sort(key=lambda x: x['z_score'], reverse=True)
-    etf_results.sort(key=lambda x: x['z_score'], reverse=True)
+    # Z-score 기준 내림차순 정렬
+    whale_alerts.sort(key=lambda x: x['z_score'], reverse=True)
+    normal_alerts.sort(key=lambda x: x['z_score'], reverse=True)
     
-    log(f"\n✅ 분석 완료. 주식: {len(stock_results)}개, ETF: {len(etf_results)}개 리포팅.")
+    log(f"\n✅ 분석 완료. 고래: {len(whale_alerts)}개, 활동성: {len(normal_alerts)}개 리포팅.")
     
     return {
-        "stocks": stock_results,
-        "etfs": etf_results
+        "whale_alerts": whale_alerts,
+        "normal_alerts": normal_alerts
     }
 
 if __name__ == "__main__":

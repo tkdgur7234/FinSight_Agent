@@ -46,10 +46,10 @@ def check_financial_health_single(ticker):
             info = stock.fast_info
             market_cap = info.market_cap
         except:
-            return ticker, False, "데이터 조회 불가"
+            return ticker, False, "데이터 조회 불가", "N/A"
 
         if market_cap is None or market_cap < MIN_MARKET_CAP:
-            return ticker, False, "시총 미달"
+            return ticker, False, "시총 미달", "N/A"
 
         try:
             last_vol = info.last_volume
@@ -59,13 +59,19 @@ def check_financial_health_single(ticker):
             
             turnover = last_vol * last_price
             if turnover < MIN_DAILY_TURNOVER:
-                return ticker, False, "거래대금 미달"
+                return ticker, False, "거래대금 미달", "N/A"
         except:
-            return ticker, False, "거래정보 없음"
+            return ticker, False, "거래정보 없음", "N/A"
 
-        return ticker, True, "Pass"
+        # [수정] 통과한 종목에 한해 섹터(Sector) 정보 추가
+        try:
+            sector = stock.info.get('sector', 'N/A')
+        except:
+            sector = 'N/A'
+
+        return ticker, True, "Pass", sector
     except Exception:
-        return ticker, False, "조회 에러"
+        return ticker, False, "조회 에러", "N/A"
 
 def get_insider_trades():
     cutoff_date = datetime.now() - timedelta(days=LOOKBACK_DAYS)
@@ -191,7 +197,7 @@ def get_insider_trades():
         # -----------------------------------------------------------
         # [Step 2] 병렬 처리 (Multi-threading)로 재무 데이터 일괄 수집
         # -----------------------------------------------------------
-        financial_cache = {} # {ticker: (is_healthy, reason)}
+        financial_cache = {} # {ticker: (is_healthy, sector)} [수정] 섹터 정보 추가 캐싱
         
         if tickers_to_check:
             with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
@@ -201,8 +207,9 @@ def get_insider_trades():
                 # 결과 수집
                 completed_cnt = 0
                 for future in as_completed(future_to_ticker):
-                    ticker, is_healthy, reason = future.result()
-                    financial_cache[ticker] = is_healthy
+                    # [수정] 섹터 정보까지 함께 리턴받아 캐시에 저장
+                    ticker, is_healthy, reason, sector = future.result()
+                    financial_cache[ticker] = (is_healthy, sector)
                     
                     completed_cnt += 1
                     if completed_cnt % 10 == 0:
@@ -268,9 +275,13 @@ def get_insider_trades():
                     continue
 
                 # 재무 필터 (캐시 사용)
+                sector = "N/A"
                 if is_purchase:
-                    # 캐시에 없으면(위에서 누락됐거나 에러난 경우) False 처리
-                    is_healthy = financial_cache.get(ticker, False)
+                    # [수정] 캐시에서 건강상태와 섹터를 함께 꺼냄
+                    cache_data = financial_cache.get(ticker, (False, "N/A"))
+                    is_healthy = cache_data[0]
+                    sector = cache_data[1]
+                    
                     if not is_healthy:
                         stats['skip_fin'] += 1
                         continue
@@ -284,18 +295,20 @@ def get_insider_trades():
                 date_str = row['dt_parsed'].strftime('%Y-%m-%d')
                 is_c_lvl = is_c_level(titles)
 
+                # [수정] HTML 템플릿의 변수명(name, amount_str)과 정확히 맞춤, 섹터 정보 추가
                 trade_data = {
                     "ticker": ticker,
-                    "insider": insider,
+                    "name": insider,          # 원래 insider -> name 으로 변경
                     "role": titles,
                     "type": trade_type,
                     "date": date_str,
                     "price": f"${price}",
                     "value": value,
-                    "value_str": f"${value:,.0f}",
+                    "amount_str": f"${value:,.0f}", # 원래 value_str -> amount_str 으로 변경
                     "is_c_level": is_c_lvl,
                     "is_cluster": is_cluster,
-                    "cluster_count": buyer_count
+                    "cluster_count": buyer_count,
+                    "sector": sector          # HTML 테이블에 들어갈 섹터 변수
                 }
 
                 if is_purchase:

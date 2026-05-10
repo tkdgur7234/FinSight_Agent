@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Response
+from fastapi.responses import HTMLResponse # 상단에 추가
 from services.briefing_market_index import get_market_summary_markdown, get_sp500_map_image 
 from services.economy_indicators import get_economy_indicators
 from services.market_news_crawl_llm import get_market_news
@@ -7,6 +8,7 @@ from services.sentiment_analysis import get_sentiment_analysis
 from services.stock_news import get_interested_stock_news
 from services.whale_tracker import get_whale_tracker_data
 from services.insider_tracker import get_insider_trades
+
 
 router = APIRouter(
     prefix="/report",  # 이 라우터의 모든 주소 앞에 /report가 붙음
@@ -23,11 +25,6 @@ def generate_market_indicators():
         "status": "success",
         "market_summary_markdown": markdown_table
     }
-
-router = APIRouter(
-    prefix="/report",
-    tags=["Report"]
-)
 
 # 1-2. S&P 500 Map 이미지(Base64) 생성 엔드포인트
 @router.post("/sp500-map")
@@ -128,13 +125,13 @@ def report_insider_trades():
         "data": data # 프론트엔드에서 data.cluster_buys 등으로 접근
     }
 
-# 최종. 모든 데이터를 취합하여 완성된 HTML 이메일 본문 반환 엔드포인트
-@router.post("/daily-briefing")
+# 최종. HTML 이메일 본문 반환 엔드포인트
+@router.post("/daily-briefing", response_class=HTMLResponse)
 def get_daily_briefing_html():
     try:
         html_content = generate_email_report()
-        return Response(content=html_content, media_type="text/html")
+        # JSON 딕셔너리가 아닌, 순수 HTML 문자열 그대로 반환
+        return HTMLResponse(content=html_content)
     except Exception as e:
-        # 서버 에러 로그를 명확히 보기 위해 print 추가
         print(f"❌ Server Error: {e}")
-        return Response(content=f"<h1>Server Error</h1><p>{str(e)}</p>", status_code=500)
+        return HTMLResponse(content=f"<h1>Server Error</h1><p>{str(e)}</p>", status_code=500)

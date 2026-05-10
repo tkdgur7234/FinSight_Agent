@@ -390,7 +390,11 @@ api 키 입력
     (ThreadPoolExecutor 이용)  
     → 약 15초로 단축
 
-### (2) 2, 3 과정 HTML 병합
+- 구동 중 아래 오류 발생은 정상
+  - 상장폐지 되었거나 OTC 주식에 대한 로그
+    → HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: AB.LE"}}}
+
+### (2) 3 과정 HTML 병합 테이블 명시
 
 - 3-1  
   Finviz(링크 포함)의 Rel Volume으로 1차 포착 후,  
@@ -401,6 +405,11 @@ api 키 입력
   티커, 분류 유형,  
   집단 매수거나 주요 매수라면  
   총 거래금과 직급 명시
+
+## 26-05-10
+
+### 모든 과정 HTML로 기능 통합
+
 
 ---
 
