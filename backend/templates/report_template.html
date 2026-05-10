@@ -38,13 +38,12 @@
         .badge-greed { background-color: #27ae60; }
         .badge-fear { background-color: #c0392b; }
         .badge-neutral { background-color: #7f8c8d; }
+        .badge-size { background-color: #8e44ad; }
         
-        .sub-title { font-size: 16px; font-weight: bold; margin: 15px 0 10px 0; color: #34495e; }
+        .sub-title { font-size: 18px; font-weight: bold; margin: 15px 0 10px 0; color: #34495e; }
         .sentiment-box { background-color: #fdfbf7; border: 1px solid #e0d6c8; padding: 15px; border-radius: 5px; margin-bottom: 15px; }
         
         .footer { text-align: center; font-size: 12px; color: #999; margin-top: 30px; }
-        
-        /* 회색 안내문 글자 크기를 15px로 고정 */
         .guide-text { font-size: 15px; color: #7f8c8d; margin-top: 5px; margin-bottom: 15px; line-height: 1.6; }
     </style>
 </head>
@@ -110,7 +109,7 @@
             <div class="section-title" style="border-left-color: #9b59b6;">👀 관심 종목 모니터링</div>
             
             {% if watchlist_sentiments %}
-            <div class="sub-title">🗣️ 커뮤니티 센티먼트 (Reddit & 종토방)</div>
+            <div class="sub-title">🗣️ 커뮤니티 투자의견(Reddit)</div>
             {% for item in watchlist_sentiments %}
             <div class="sentiment-box">
                 <div style="display: flex; align-items: center; margin-bottom: 5px;">
@@ -157,7 +156,7 @@
                 Finviz(Rel Volume)로 1차 포착 후, 통계적 이상치(Z-score) 분석을 통해 단순 변동성을 넘어선 세력의 개입이 의심되는 종목입니다. (상위 15개)
             </p>
             <table>
-                <tr><th>티커</th><th>섹터</th><th>Z-Score</th><th>빈도 (주/월)</th></tr>
+                <tr><th>티커</th><th>규모</th><th>섹터(대분류)</th><th>Z-Score</th><th>빈도 (주/월)</th></tr>
                 {% if whale_alerts %}
                     {% for whale in whale_alerts[:15] %}
                     <tr>
@@ -166,13 +165,14 @@
                                 <span class="badge badge-ticker">{{ whale['ticker'] }}</span>
                             </a>
                         </td>
-                        <td style="color: #666; font-size: 13px;">{{ whale['industry'] }}</td>
+                        <td style="font-size: 12px; font-weight: bold; color: #8e44ad;">{{ whale['size'] }}</td>
+                        <td style="color: #666; font-size: 13px;">{{ whale['sector'] }}</td>
                         <td style="color: #c0392b; font-weight: bold;">{{ whale['z_score'] }}</td>
                         <td style="font-size: 13px;">{{ whale['weekly_freq'] }}회 / {{ whale['monthly_freq'] }}회</td>
                     </tr>
                     {% endfor %}
                 {% else %}
-                    <tr><td colspan="4" style="color: #999; padding: 20px;">포착된 내역이 없습니다.</td></tr>
+                    <tr><td colspan="5" style="color: #999; padding: 20px;">포착된 내역이 없습니다.</td></tr>
                 {% endif %}
             </table>
 
@@ -181,29 +181,30 @@
                 단순 과매수 또는 시장 관심으로 인해 거래량이 평소보다 증가했으나, 통계적 이상 범위(2.0)에는 미치지 못하는 종목입니다. (상위 10개)
             </p>
             <table>
-                <tr><th>티커</th><th>섹터</th><th>Z-Score</th><th>상태</th></tr>
+                <tr><th>티커</th><th>규모</th><th>섹터(대분류)</th><th>Z-Score</th><th>상태</th></tr>
                 {% if normal_alerts %}
                     {% for item in normal_alerts[:10] %}
                     <tr>
                         <td>
                             <a href="https://finviz.com/quote.ashx?t={{ item['ticker'] }}" target="_blank" class="ticker-link">
-                                <span class="badge badge-ticker" style="background-color: #7f8c8d;">{{ item['ticker'] }}</span>
+                                <span class="badge badge-ticker" style="background-color: #3e4766;">{{ item['ticker'] }}</span>
                             </a>
                         </td>
-                        <td style="color: #666; font-size: 13px;">{{ item['industry'] }}</td>
-                        <td style="color: #2980b9; font-weight: bold;">{{ item['z_score'] }}</td>
+                        <td style="font-size: 12px; font-weight: bold; color: #8e44ad;">{{ item['size'] }}</td>
+                        <td style="color: #666; font-size: 13px;">{{ item['sector'] }}</td>
+                        <td style="color: #a74d4d; font-weight: bold;">{{ item['z_score'] }}</td>
                         <td style="font-size: 13px; color: #27ae60;">활동성 증가</td>
                     </tr>
                     {% endfor %}
                 {% else %}
-                    <tr><td colspan="4" style="color: #999; padding: 20px;">포착된 내역이 없습니다.</td></tr>
+                    <tr><td colspan="5" style="color: #999; padding: 20px;">포착된 내역이 없습니다.</td></tr>
                 {% endif %}
             </table>
 
             {% if insider_trades %}
             <div class="sub-title" style="margin-top: 40px;">🕵️ 내부자 거래 동향 (최근 30일)</div>
             <p class="guide-text">
-                티커, 분야(섹터), 그리고 집단 매수거나 주요 매수/매도일 경우 총 거래금과 직급을 명시합니다.
+                티커, 분야(세부 산업), 그리고 집단 매수거나 주요 매수/매도일 경우 총 거래금과 직급을 명시합니다.
             </p>
 
             <div style="margin-top: 10px; margin-bottom: 25px; padding: 15px; background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: 5px; font-size: 15px; color: #6c757d; line-height: 1.8;">
@@ -215,12 +216,16 @@
             
             <div style="margin-top: 15px; font-weight: bold; color: #d35400;">👑 Cluster Buy (집단 매수)</div>
             <table>
-                <tr><th>티커</th><th>섹터</th><th>내부자 (직급)</th><th>거래금</th></tr>
+                <tr><th>티커</th><th>세부 산업</th><th>내부자 (직급)</th><th>거래금</th></tr>
                 {% if insider_trades['cluster_buys'] %}
                     {% for trade in insider_trades['cluster_buys'] %}
                     <tr>
-                        <td><span class="badge badge-ticker">{{ trade['ticker'] }}</span></td>
-                        <td style="font-size: 12px;">{{ trade['sector'] }}</td>
+                        <td>
+                            <a href="https://finviz.com/quote.ashx?t={{ trade['ticker'] }}" target="_blank" style="text-decoration: none;">
+                                <span class="badge badge-ticker">{{ trade['ticker'] }}</span>
+                            </a>
+                        </td>
+                        <td style="font-size: 12px; color: #666;">{{ trade['industry'] }}</td>
                         <td style="text-align: left; font-size: 13px;">{{ trade['name'] }} ({{ trade['role'] }})</td>
                         <td style="color: #27ae60; font-weight: bold;">{{ trade['amount_str'] }}</td>
                     </tr>
@@ -232,12 +237,16 @@
 
             <div style="margin-top: 20px; font-weight: bold; color: #2980b9;">💎 주요 매수 (Significant Buy)</div>
             <table>
-                <tr><th>티커</th><th>섹터</th><th>내부자 (직급)</th><th>거래금</th></tr>
+                <tr><th>티커</th><th>세부 산업</th><th>내부자 (직급)</th><th>거래금</th></tr>
                 {% if insider_trades['major_buys'] %}
                     {% for trade in insider_trades['major_buys'] %}
                     <tr>
-                        <td><span class="badge badge-ticker">{{ trade['ticker'] }}</span></td>
-                        <td style="font-size: 12px;">{{ trade['sector'] }}</td>
+                        <td>
+                            <a href="https://finviz.com/quote.ashx?t={{ trade['ticker'] }}" target="_blank" style="text-decoration: none;">
+                                <span class="badge badge-ticker">{{ trade['ticker'] }}</span>
+                            </a>
+                        </td>
+                        <td style="font-size: 12px; color: #666;">{{ trade['industry'] }}</td>
                         <td style="text-align: left; font-size: 13px;">{{ trade['name'] }} ({{ trade['role'] }})</td>
                         <td style="color: #27ae60; font-weight: bold;">{{ trade['amount_str'] }}</td>
                     </tr>
@@ -249,12 +258,16 @@
 
             <div style="margin-top: 20px; font-weight: bold; color: #8e44ad;">📉 대량 매도 (Big Sell)</div>
             <table>
-                <tr><th>티커</th><th>섹터</th><th>내부자 (직급)</th><th>거래금</th></tr>
+                <tr><th>티커</th><th>세부 산업</th><th>내부자 (직급)</th><th>거래금</th></tr>
                 {% if insider_trades['big_sells'] %}
                     {% for trade in insider_trades['big_sells'] %}
                     <tr>
-                        <td><span class="badge badge-ticker">{{ trade['ticker'] }}</span></td>
-                        <td style="font-size: 12px;">{{ trade['sector'] }}</td>
+                        <td>
+                            <a href="https://finviz.com/quote.ashx?t={{ trade['ticker'] }}" target="_blank" style="text-decoration: none;">
+                                <span class="badge badge-ticker">{{ trade['ticker'] }}</span>
+                            </a>
+                        </td>
+                        <td style="font-size: 12px; color: #666;">{{ trade['industry'] }}</td>
                         <td style="text-align: left; font-size: 13px;">{{ trade['name'] }} ({{ trade['role'] }})</td>
                         <td style="color: #c0392b; font-weight: bold;">{{ trade['amount_str'] }}</td>
                     </tr>
@@ -269,7 +282,8 @@
 
         <div class="footer">
             본 리포트는 AI에 의해 자동 생성되었으며, 투자의 참고 자료로만 활용하시기 바랍니다.<br>
-            Created by FinSight_Agent
+            문의사항: tkdgur7234@kakao.com<br>
+            Created by SangHyeok Park | FinSight Agent © 2026
         </div>
     </div>
 </body>

@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import time
 import random
 from concurrent.futures import ThreadPoolExecutor, as_completed # [추가] 병렬 처리를 위함
+from collections import defaultdict
 
 # ---------------------------------------------------------
 # [설정] 필터링 기준 (USD)
@@ -65,11 +66,11 @@ def check_financial_health_single(ticker):
 
         # [수정] 통과한 종목에 한해 섹터(Sector) 정보 추가
         try:
-            sector = stock.info.get('sector', 'N/A')
+            industry = stock.info.get('industry', 'N/A')
         except:
-            sector = 'N/A'
+            industry = 'N/A'
 
-        return ticker, True, "Pass", sector
+        return ticker, True, "Pass", industry
     except Exception:
         return ticker, False, "조회 에러", "N/A"
 
@@ -275,12 +276,12 @@ def get_insider_trades():
                     continue
 
                 # 재무 필터 (캐시 사용)
-                sector = "N/A"
+                industry = "N/A" # [수정] 변수명을 sector에서 industry로 변경
                 if is_purchase:
-                    # [수정] 캐시에서 건강상태와 섹터를 함께 꺼냄
+                    # 캐시에서 건강상태와 세부 산업(industry)을 함께 꺼냄
                     cache_data = financial_cache.get(ticker, (False, "N/A"))
                     is_healthy = cache_data[0]
-                    sector = cache_data[1]
+                    industry = cache_data[1]
                     
                     if not is_healthy:
                         stats['skip_fin'] += 1
@@ -295,20 +296,25 @@ def get_insider_trades():
                 date_str = row['dt_parsed'].strftime('%Y-%m-%d')
                 is_c_lvl = is_c_level(titles)
 
-                # [수정] HTML 템플릿의 변수명(name, amount_str)과 정확히 맞춤, 섹터 정보 추가
+                # [수정] 금액 포맷팅 최적화 ($1.2M 또는 $150k 형태)
+                if value >= 1_000_000:
+                    amount_str_formatted = f"${value/1_000_000:.1f}M"
+                else:
+                    amount_str_formatted = f"${int(value/1000)}k"
+
                 trade_data = {
                     "ticker": ticker,
-                    "name": insider,          # 원래 insider -> name 으로 변경
+                    "industry": industry,     # [수정] HTML 매핑용 키값을 industry로 변경
+                    "name": insider,          
                     "role": titles,
                     "type": trade_type,
                     "date": date_str,
                     "price": f"${price}",
                     "value": value,
-                    "amount_str": f"${value:,.0f}", # 원래 value_str -> amount_str 으로 변경
+                    "amount_str": amount_str_formatted, 
                     "is_c_level": is_c_lvl,
                     "is_cluster": is_cluster,
-                    "cluster_count": buyer_count,
-                    "sector": sector          # HTML 테이블에 들어갈 섹터 변수
+                    "cluster_count": buyer_count
                 }
 
                 if is_purchase:
@@ -321,8 +327,33 @@ def get_insider_trades():
 
             except Exception: continue
 
-        # 정렬
-        cluster_buys.sort(key=lambda x: x['value'], reverse=True)
+        # 1. 집단 매수(Cluster Buys)를 티커별로 그룹화
+        cluster_groups = defaultdict(list)
+        for trade in cluster_buys:
+            cluster_groups[trade['ticker']].append(trade)
+
+        # 2. 그룹별 총 거래 금액 계산 및 내부 정렬
+        cluster_summary = []
+        for ticker, trades in cluster_groups.items():
+            total_val = sum(t['value'] for t in trades) # 티커별 총합
+            trades.sort(key=lambda x: x['value'], reverse=True) # 그룹 내 개별 정렬
+            cluster_summary.append({
+                'ticker': ticker,
+                'total_val': total_val,
+                'trades': trades
+            })
+
+        # 3. 그룹 총액(total_val) 기준으로 티커 그룹 정렬
+        cluster_summary.sort(key=lambda x: x['total_val'], reverse=True)
+
+        # 4. 정렬된 그룹을 다시 리스트로 평탄화 (HTML 렌더링용)
+        sorted_cluster_buys = []
+        for group in cluster_summary:
+            sorted_cluster_buys.extend(group['trades'])
+
+        cluster_buys = sorted_cluster_buys
+        
+        # 주요 매수 및 대량 매도는 기존처럼 개별 거래금액 기준으로 정렬
         significant_buys.sort(key=lambda x: x['value'], reverse=True)
         significant_sells.sort(key=lambda x: x['value'], reverse=True)
 

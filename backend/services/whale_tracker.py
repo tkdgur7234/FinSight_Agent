@@ -24,7 +24,7 @@ NYSE_HOLIDAYS = [
 
 def log(msg):
     print(msg, flush=True)
-
+    
 def get_target_report_date():
     target_date = datetime.now() - timedelta(days=1)
     while True:
@@ -97,6 +97,24 @@ def calculate_metrics(ticker, today_vol):
         return float(round(z_score, 2))
     except:
         return 0.0
+    
+# [추가] 기업 규모 분류 함수 (get_whale_tracker_data 함수 바로 위에 위치)
+def categorize_market_cap(mc_str):
+    if pd.isna(mc_str) or mc_str == '-': return "-"
+    try:
+        val = float(mc_str.replace('B','').replace('M','').replace('K',''))
+        if 'B' in mc_str:
+            if val >= 200: return "Mega"
+            elif val >= 10: return "Large"
+            elif val >= 2: return "Mid"
+            else: return "Small"
+        elif 'M' in mc_str:
+            if val >= 300: return "Small"
+            elif val >= 50: return "Micro"
+            else: return "Nano"
+        return "Nano"
+    except:
+        return "-"
 
 def get_whale_tracker_data():
     log("🐋 [Whale Tracker] 데이터 수집 및 Z-score 분류 시작...")
@@ -138,9 +156,22 @@ def get_whale_tracker_data():
                         if ticker in seen_tickers: continue
                         seen_tickers.add(ticker)
 
-                        industry = str(row.get('Industry', 'Unknown'))
+                        # [로직 수정] 대분류 섹터와 세부 산업을 모두 가져와 ETF 여부 판별
+                        raw_sector = str(row.get('Sector', 'Unknown'))
+                        raw_industry = str(row.get('Industry', 'Unknown'))
+                        market_cap_str = str(row.get('Market Cap', '-'))
+
+                        # 중분류(Industry)가 ETF면 섹터명을 'ETF'로 고정, 아니면 대분류(Sector) 사용
+                        if "Exchange Traded Fund" in raw_industry:
+                            display_sector = "ETF"
+                        else:
+                            display_sector = raw_sector
+                            
+                        company_size = categorize_market_cap(market_cap_str)
+
                         price = float(str(row.get('Price', 0)))
                         vol_str = str(row.get('Volume', '0'))
+                        # Volume 계산 로직
                         if 'M' in vol_str: volume = int(float(vol_str.replace('M','')) * 1_000_000)
                         elif 'B' in vol_str: volume = int(float(vol_str.replace('B','')) * 1_000_000_000)
                         elif 'K' in vol_str: volume = int(float(vol_str.replace('K','')) * 1_000)
@@ -157,9 +188,11 @@ def get_whale_tracker_data():
                             weekly_freq, monthly_freq = get_frequency(ticker)
                             log(f"      🚨 [고래포착] {ticker} (Z:{z_score})")
 
+                        # item_data에 반영
                         item_data = {
                             "ticker": ticker,
-                            "industry": industry.replace("Exchange Traded Fund", "ETF"),
+                            "sector": display_sector, # ETF일 경우 'ETF'로 표기됨
+                            "size": company_size,
                             "z_score": z_score,
                             "weekly_freq": weekly_freq,
                             "monthly_freq": monthly_freq
