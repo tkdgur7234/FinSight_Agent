@@ -67,11 +67,12 @@ def generate_email_report():
     print("Tracking Whale Trades...")
     raw_whale_data = get_whale_tracker_data()
     
-    # HTML 템플릿 구조에 맞게 stocks와 etfs를 하나의 리스트로 통합
+    # [수정] stocks/etfs 대신 whale_alerts/normal_alerts 로 받기
     whale_list = []
+    normal_list = []
     if raw_whale_data:
-        whale_list.extend(raw_whale_data.get('stocks', []))
-        whale_list.extend(raw_whale_data.get('etfs', []))
+        whale_list = raw_whale_data.get('whale_alerts', [])
+        normal_list = raw_whale_data.get('normal_alerts', [])
 
     print("Tracking Insider Trades...")
     insider_trades = get_insider_trades()
@@ -98,10 +99,12 @@ def generate_email_report():
         market_table_html=html_table,
         sp500_image=sp500_img,
         economy_list=economy_data,
-        market_news_list=news_list,           # HTML의 {{ market_news_list }}에 대응
+        market_news_list=news_list,           
         watchlist_sentiments=watchlist_sentiments, # 2-1
         watchlist_news=watchlist_news,             # 2-2
-        whale_alerts=whale_list,                   # 3-1
+        whale_alerts=whale_list,                   # 3-1 (고래 포착 Z >= 2.0)
+        normal_alerts=normal_list,                 # 3-1 (활동성 급증 Z < 2.0)
+        
         insider_trades=insider_trades              # 3-2
     )
     
