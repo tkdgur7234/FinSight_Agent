@@ -3,7 +3,7 @@ import requests
 import os
 import json
 import re
-from datetime import datetime
+from datetime import datetime, time
 from time import mktime
 from bs4 import BeautifulSoup
 from openai import OpenAI
@@ -17,15 +17,15 @@ load_dotenv()
 # 이제 'avg_velocity'는 초기값일 뿐, 데이터가 쌓이면 무시됩니다.
 TARGET_STOCKS = [
     {
-        "ticker": "TSLA",         
-        "name": "Tesla",
+        "ticker": "SNDK",         
+        "name": "SanDisk Corp",
         "fetch_limit": 100,
         "avg_velocity": 10, # 초기값 (데이터 없을 때 사용)
         "use_naver": False 
     },
     {
-        "ticker": "RKLB",         
-        "name": "Rocket Lab",
+        "ticker": "TSLA",         
+        "name": "Tesla",
         "fetch_limit": 100,
         "avg_velocity": 10, # 초기값 (데이터 없을 때 사용)
         "use_naver": False 
@@ -195,41 +195,71 @@ def check_volume_spike(ticker, posts, default_velocity):
         print(f"Calc Error: {e}")
         return "Calc Error", 0
 
+import time
+import random # 상단에 추가
+import requests # 상단에 requests가 import 되어 있어야 합니다.
+
+# [핵심] 함수 바깥(또는 파일 상단)에 Session 객체를 하나 만들어 둡니다.
+# 이렇게 하면 프로그램이 실행되는 동안 쿠키와 연결 상태가 유지됩니다.
+reddit_session = requests.Session()
+
 def get_reddit_posts(ticker, limit):
     rss_url = f"https://www.reddit.com/r/stocks+wallstreetbets+investing+technology/search.rss?q={ticker}&sort=new&restrict_sr=on&limit=100"
     
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    }
-
     posts = []
     print(f"🔍 [Reddit] {ticker} 수집 시도 (Max 100)...")
     
-    try:
-        resp = requests.get(rss_url, headers=headers, timeout=10)
-        if resp.status_code != 200:
-            return []
-
-        feed = feedparser.parse(resp.content)
-        if not feed.entries:
-            return []
-
-        for entry in feed.entries:
-            if len(posts) >= limit: break
-            content = clean_text(entry.description) if 'description' in entry else ""
-            full_text = f"{entry.title} {content}"
+    max_retries = 3
+    for attempt in range(max_retries):
+        # 헤더를 조금 더 사람(브라우저)처럼 보이게 보강합니다.
+        headers = {
+            'User-Agent': f'MyFinBot_v1.{random.randint(100, 999)} (Contact: myemail@gmail.com)',
+            'Accept': 'application/rss+xml, application/xml, text/xml; q=0.9, */*; q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9'
+        }
+        
+        try:
+            # [변경] requests.get 대신 reddit_session.get 을 사용합니다!
+            resp = reddit_session.get(rss_url, headers=headers, timeout=10)
             
-            if len(full_text) < 10: continue
-            if any(k in full_text.lower() for k in SPAM_KEYWORDS): continue
+            if resp.status_code == 200:
+                feed = feedparser.parse(resp.content)
+                if not feed.entries:
+                    return []
+
+                # (이전과 동일한 파싱 로직)
+                for entry in feed.entries:
+                    if len(posts) >= limit: break
+                    content = clean_text(entry.description) if 'description' in entry else ""
+                    full_text = f"{entry.title} {content}"
+                    
+                    if len(full_text) < 10: continue
+                    if any(k in full_text.lower() for k in SPAM_KEYWORDS): continue
+                    
+                    if hasattr(entry, 'published_parsed') and entry.published_parsed:
+                        dt = datetime.fromtimestamp(mktime(entry.published_parsed))
+                    else:
+                        dt = datetime.now()
+                    posts.append({"text": full_text[:500], "dt": dt})
+                
+                return posts
+
+            elif resp.status_code == 429:
+                wait_time = (attempt + 1) * 5  # 대기 시간을 조금 더 늘립니다 (5초, 10초, 15초)
+                print(f"   ⚠️ [Reddit] 429 차단! {wait_time}초 대기 후 재시도... ({attempt+1}/{max_retries})")
+                time.sleep(wait_time)
+                continue
             
-            if hasattr(entry, 'published_parsed') and entry.published_parsed:
-                dt = datetime.fromtimestamp(mktime(entry.published_parsed))
             else:
-                dt = datetime.now()
-            posts.append({"text": full_text[:500], "dt": dt})
-    except:
-        return []
-    return posts
+                print(f"   ⚠️ [Reddit] {ticker} 요청 실패! 상태 코드: {resp.status_code}")
+                return []
+                
+        except Exception as e:
+            print(f"   ⚠️ [Reddit] 통신 에러: {e}")
+            time.sleep(2)
+            
+    print(f"   ❌ [Reddit] {ticker} 최대 재시도 초과로 포기.")
+    return []
 
 def get_naver_posts(code, limit):
     posts = []
@@ -291,8 +321,9 @@ def summarize_with_llm(ticker, posts):
     Select exactly 10 most meaningful points.
     
     CRITICAL RULES:
-    1. Do NOT translate the whole post. SUMMARIZE each point into just ONE short Korean sentence.
-    2. Output format MUST be a pure, valid JSON array of strings. Do not add any conversational text.
+    1. SUMMARIZE each point into just ONE short Korean sentence (under 40 characters).
+    2. Output format MUST be a pure, valid JSON array of strings.
+    3. You MUST separate each string with a comma (,). Do NOT cut off the text.
     
     Example format:
     ["테슬라 자율주행 기술에 대한 혼란이 가중되고 있습니다.", "단기 옵션 매도 시점에 대한 투자자들의 후회가 많습니다."]
@@ -379,5 +410,6 @@ def get_sentiment_analysis():
         except Exception as e:
             print(f"❌ [{stock.get('name')}] 오류: {e}")
             continue
-            
+
+        time.sleep(2)
     return results
