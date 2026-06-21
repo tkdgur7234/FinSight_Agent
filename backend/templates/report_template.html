@@ -3,77 +3,54 @@
 <head>
     <meta charset="utf-8">
     <title>Daily Market Briefing</title>
-    <style>
-        /* 기본 스타일 */
-        body { font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; line-height: 1.6; color: #333; background-color: #f4f4f4; margin: 0; padding: 0; }
-        .container { max-width: 700px; margin: 0 auto; background-color: #ffffff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        .header { background-color: #2c3e50; color: #ffffff; padding: 15px; text-align: center; border-radius: 8px 8px 0 0; }
-        .header h1 { margin: 0; font-size: 24px; }
-        .date { font-size: 14px; color: #ecf0f1; margin-top: 5px; }
-        
-        .section { margin-bottom: 30px; border-bottom: 1px solid #eee; padding-bottom: 20px; }
-        .section:last-child { border-bottom: none; }
-        .section-title { font-size: 18px; font-weight: bold; color: #2c3e50; border-left: 5px solid #3498db; padding-left: 10px; margin-bottom: 15px; }
-        
-        /* 테이블 공통 스타일 */
-        table { width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 15px; }
-        th, td { padding: 10px; border-bottom: 1px solid #ddd; text-align: center; }
-        th { background-color: #f8f9fa; font-weight: bold; color: #2c3e50; }
-        .ticker-link { text-decoration: none; color: #2980b9; font-weight: bold; }
-        .ticker-link:hover { text-decoration: underline; }
-        
-        /* 경제지표 및 뉴스 등 기타 스타일 */
-        .eco-item { background: #f9f9f9; padding: 10px; margin-bottom: 8px; border-radius: 4px; border-left: 3px solid #ddd; }
-        .eco-item.high { border-left-color: #e74c3c; }
-        .eco-row { display: flex; justify-content: space-between; align-items: center; }
-        .eco-name { font-weight: bold; font-size: 14px; }
-        .eco-val { font-weight: bold; color: #2980b9; }
-
-        .news-item { margin-bottom: 15px; }
-        .news-title { font-weight: bold; color: #2c3e50; text-decoration: none; font-size: 15px; display: block; margin-bottom: 4px;}
-        .news-meta { font-size: 12px; color: #95a5a6; margin-bottom: 5px; }
-        
-        .badge { display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; color: white; margin-right: 5px; }
-        .badge-ticker { background-color: #34495e; }
-        .badge-greed { background-color: #27ae60; }
-        .badge-fear { background-color: #c0392b; }
-        .badge-neutral { background-color: #7f8c8d; }
-        .badge-size { background-color: #8e44ad; }
-        
-        .sub-title { font-size: 18px; font-weight: bold; margin: 15px 0 10px 0; color: #34495e; }
-        .sentiment-box { background-color: #fdfbf7; border: 1px solid #e0d6c8; padding: 15px; border-radius: 5px; margin-bottom: 15px; }
-        
-        .footer { text-align: center; font-size: 12px; color: #999; margin-top: 30px; }
-        .guide-text { font-size: 15px; color: #7f8c8d; margin-top: 5px; margin-bottom: 15px; line-height: 1.6; }
-    </style>
 </head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>🇺🇸 미국 증시 데일리 브리핑</h1>
-            <div class="date">{{ today_date }}</div>
+<body style="font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; line-height: 1.6; color: #333; background-color: #f4f4f4; margin: 0; padding: 20px;">
+    
+    <div style="max-width: 700px; margin: 0 auto; background-color: #ffffff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+        
+        <div style="background-color: #2c3e50; color: #ffffff; padding: 15px; text-align: center; border-radius: 8px 8px 0 0;">
+            <h1 style="margin: 0; font-size: 24px;">🇺🇸 미국 증시 데일리 브리핑</h1>
+            <div style="font-size: 14px; color: #ecf0f1; margin-top: 5px;">{{ today_date }}</div>
         </div>
 
-        <div class="section" style="background-color: #eef7fa; padding: 15px; border-radius: 5px; margin-top: 20px;">
-            <div class="section-title" style="border-left-color: #e67e22; margin-top: 0;">⚡ 오늘의 핵심 요약</div>
+        <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin-top: 20px; border: 1px solid #e9ecef;">
+            <div style="font-size: 16px; font-weight: bold; color: #2c3e50; margin-bottom: 10px;">📑 리포트 목차</div>
+            <ul style="margin: 0; padding-left: 20px; font-size: 14px; line-height: 1.8;">
+                <li><a href="#summary" style="color: #2980b9; text-decoration: none; font-weight: 500;">오늘의 핵심 요약</a></li>
+                <li><a href="#indices" style="color: #2980b9; text-decoration: none; font-weight: 500;">주요 지수 현황</a></li>
+                {% if economy_list %}<li><a href="#economy" style="color: #2980b9; text-decoration: none; font-weight: 500;">주요 경제 지표 발표</a></li>{% endif %}
+                {% if sp500_image %}<li><a href="#heatmap" style="color: #2980b9; text-decoration: none; font-weight: 500;">S&P 500 히트맵</a></li>{% endif %}
+                <li><a href="#news" style="color: #2980b9; text-decoration: none; font-weight: 500;">간밤의 월스트리트 주요 뉴스</a></li>
+                {% if watchlist_sentiments or watchlist_news %}<li><a href="#watchlist" style="color: #2980b9; text-decoration: none; font-weight: 500;">관심 종목 모니터링</a></li>{% endif %}
+                {% if whale_alerts or normal_alerts or insider_trades %}<li><a href="#anomaly" style="color: #2980b9; text-decoration: none; font-weight: 500;">이상 거래 감지 시스템</a></li>{% endif %}
+            </ul>
+        </div>
+
+        <div id="summary" style="background-color: #eef7fa; padding: 15px; border-radius: 5px; margin-top: 30px; margin-bottom: 30px; border-bottom: 1px solid #eee;">
+            <div style="font-size: 18px; font-weight: bold; color: #2c3e50; border-left: 5px solid #e67e22; padding-left: 10px; margin-bottom: 15px; margin-top: 0;">⚡ 오늘의 핵심 요약</div>
             <div style="font-size: 15px; font-weight: 500;">
                 {{ market_summary }}
             </div>
         </div>
 
-        <div class="section">
-            <div class="section-title">📊 주요 지수 현황</div>
+        <div id="indices" style="margin-bottom: 30px; border-bottom: 1px solid #eee; padding-bottom: 20px;">
+            <div style="font-size: 18px; font-weight: bold; color: #2c3e50; border-left: 5px solid #3498db; padding-left: 10px; margin-bottom: 15px;">📊 주요 지수 현황</div>
             {{ market_table_html | safe }}
         </div>
 
         {% if economy_list %}
-        <div class="section">
-            <div class="section-title">📅 주요 경제 지표 발표</div>
+        <div id="economy" style="margin-bottom: 30px; border-bottom: 1px solid #eee; padding-bottom: 20px;">
+            <div style="font-size: 18px; font-weight: bold; color: #2c3e50; border-left: 5px solid #3498db; padding-left: 10px; margin-bottom: 15px;">📅 주요 경제 지표 발표</div>
             {% for eco in economy_list %}
-            <div class="eco-item {% if 'High' in eco['중요도'] %}high{% endif %}">
-                <div class="eco-row">
-                    <span class="eco-name">{{ eco['지표명'] }}</span>
-                    <span class="eco-val">{{ eco['발표값'] | safe }}</span>
+            
+            {% if 'High' in eco['중요도'] %}
+            <div style="background: #f9f9f9; padding: 10px; margin-bottom: 8px; border-radius: 4px; border-left: 3px solid #e74c3c;">
+            {% else %}
+            <div style="background: #f9f9f9; padding: 10px; margin-bottom: 8px; border-radius: 4px; border-left: 3px solid #ddd;">
+            {% endif %}
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-weight: bold; font-size: 14px;">{{ eco['지표명'] }}</span>
+                    <span style="font-weight: bold; color: #2980b9;">{{ eco['발표값'] | safe }}</span>
                 </div>
                 <div style="font-size: 12px; color: #666; margin-top: 4px;">
                     예상: {{ eco['예상'] }} | 중요도: {{ eco['중요도'] }}
@@ -84,50 +61,50 @@
         {% endif %}
 
         {% if sp500_image %}
-        <div class="section">
-            <div class="section-title">🌎 S&P 500 히트맵</div>
+        <div id="heatmap" style="margin-bottom: 30px; border-bottom: 1px solid #eee; padding-bottom: 20px;">
+            <div style="font-size: 18px; font-weight: bold; color: #2c3e50; border-left: 5px solid #3498db; padding-left: 10px; margin-bottom: 15px;">🌎 S&P 500 히트맵</div>
             <a href="https://finviz.com/map.ashx?t=sec" target="_blank">
-                <img src="data:image/png;base64,{{ sp500_image }}" style="width: 100%; border-radius: 5px; border: 1px solid #ddd;" />
+                <img src="data:image/png;base64,{{ sp500_image }}" style="width: 100%; max-width: 660px; border-radius: 5px; border: 1px solid #ddd; display: block;" />
             </a>
         </div>
         {% endif %}
 
-        <div class="section">
-            <div class="section-title" style="border-left-color: #34495e;">📰 간밤의 월스트리트 주요 뉴스</div>
+        <div id="news" style="margin-bottom: 30px; border-bottom: 1px solid #eee; padding-bottom: 20px;">
+            <div style="font-size: 18px; font-weight: bold; color: #2c3e50; border-left: 5px solid #34495e; padding-left: 10px; margin-bottom: 15px;">📰 간밤의 월스트리트 주요 뉴스</div>
             {% for news in market_news_list %}
-            <div class="news-item">
-                <a href="{{ news['link'] }}" target="_blank" class="news-title">
+            <div style="margin-bottom: 15px;">
+                <a href="{{ news['link'] }}" target="_blank" style="font-weight: bold; color: #2c3e50; text-decoration: none; font-size: 15px; display: block; margin-bottom: 4px;">
                     {{ news['title'] | safe }}
                 </a>
-                <div class="news-meta">{{ news['pub_date'] }} | 요약: {{ news['summary'] }}</div>
+                <div style="font-size: 12px; color: #95a5a6; margin-bottom: 5px;">{{ news['pub_date'] }} | 요약: {{ news['summary'] }}</div>
             </div>
             {% endfor %}
         </div>
 
         {% if watchlist_sentiments or watchlist_news %}
-        <div class="section">
-            <div class="section-title" style="border-left-color: #9b59b6;">👀 관심 종목 모니터링</div>
+        <div id="watchlist" style="margin-bottom: 30px; border-bottom: 1px solid #eee; padding-bottom: 20px;">
+            <div style="font-size: 18px; font-weight: bold; color: #2c3e50; border-left: 5px solid #9b59b6; padding-left: 10px; margin-bottom: 15px;">👀 관심 종목 모니터링</div>
             
             {% if watchlist_sentiments %}
-            <div class="sub-title">🗣️ 커뮤니티 투자의견(Reddit)</div>
+            <div style="font-size: 16px; font-weight: bold; margin: 15px 0 10px 0; color: #34495e;">🗣️ 커뮤니티 투자의견(Reddit)</div>
             {% for item in watchlist_sentiments %}
-            <div class="sentiment-box">
-                <div style="display: flex; align-items: center; margin-bottom: 5px;">
-                    <span class="badge badge-ticker">{{ item['ticker'] }}</span>
+            <div style="background-color: #fdfbf7; border: 1px solid #e0d6c8; padding: 15px; border-radius: 5px; margin-bottom: 15px;">
+                <div style="margin-bottom: 5px;">
+                    <span style="display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; color: white; margin-right: 5px; background-color: #34495e;">{{ item['ticker'] }}</span>
                     {% if item['score'] >= 60 %}
-                        <span class="badge badge-greed">탐욕 ({{ item['score'] }})</span>
+                        <span style="display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; color: white; margin-right: 5px; background-color: #27ae60;">탐욕 ({{ item['score'] }})</span>
                     {% elif item['score'] <= 40 %}
-                        <span class="badge badge-fear">공포 ({{ item['score'] }})</span>
+                        <span style="display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; color: white; margin-right: 5px; background-color: #c0392b;">공포 ({{ item['score'] }})</span>
                     {% else %}
-                        <span class="badge badge-neutral">중립 ({{ item['score'] }})</span>
+                        <span style="display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; color: white; margin-right: 5px; background-color: #7f8c8d;">중립 ({{ item['score'] }})</span>
                     {% endif %}
                 </div>
                 <div style="font-size: 13px; font-weight: bold; color: #d35400; margin-bottom: 8px;">
                     👉 {{ item['reason_korean'] }}
                 </div>
-                <ul style="list-style-type: '💬 '; padding-left: 20px;">
+                <ul style="list-style-type: none; padding-left: 0; margin: 0;">
                     {% for point in item['summary_sentences'] %}
-                    <li style="margin-bottom: 6px;">{{ point }}</li>
+                    <li style="margin-bottom: 6px; font-size: 14px;">💬 {{ point }}</li>
                     {% endfor %}
                 </ul>
             </div>
@@ -135,10 +112,10 @@
             {% endif %}
 
             {% if watchlist_news %}
-            <div class="sub-title">🗞️ 관심 종목 최신 뉴스</div>
+            <div style="font-size: 16px; font-weight: bold; margin: 15px 0 10px 0; color: #34495e;">🗞️ 관심 종목 최신 뉴스</div>
             {% for news in watchlist_news %}
-            <div class="news-item">
-                <a href="{{ news['link'] }}" target="_blank" class="news-title">
+            <div style="margin-bottom: 10px;">
+                <a href="{{ news['link'] }}" target="_blank" style="font-weight: bold; color: #2c3e50; text-decoration: none; font-size: 15px;">
                     <span style="color: #2980b9;">[{{ news['ticker'] }}]</span> {{ news['title'] | safe }}
                 </a>
             </div>
@@ -148,139 +125,166 @@
         {% endif %}
 
         {% if whale_alerts or normal_alerts or insider_trades %}
-        <div class="section">
-            <div class="section-title" style="border-left-color: #e74c3c;">🚨 이상 거래 감지 시스템</div>
+        <div id="anomaly" style="margin-bottom: 30px; border-bottom: none; padding-bottom: 20px;">
+            <div style="font-size: 18px; font-weight: bold; color: #2c3e50; border-left: 5px solid #e74c3c; padding-left: 10px; margin-bottom: 15px;">🚨 이상 거래 감지 시스템</div>
             
-            <div class="sub-title">🐋 대규모 거래 포착 (Z-score ≥ 2.0)</div>
-            <p class="guide-text">
+            <div style="font-size: 16px; font-weight: bold; margin: 15px 0 10px 0; color: #34495e;">🐋 대규모 거래 포착 (Z-score ≥ 2.0)</div>
+            <p style="font-size: 14px; color: #7f8c8d; margin-top: 5px; margin-bottom: 15px; line-height: 1.6;">
                 Finviz(Rel Volume)로 1차 포착 후, 통계적 이상치(Z-score) 분석을 통해 단순 변동성을 넘어선 세력의 개입이 의심되는 종목입니다. (상위 15개)
             </p>
-            <table>
-                <tr><th>티커</th><th>규모</th><th>섹터(대분류)</th><th>Z-Score</th><th>빈도 (주/월)</th></tr>
+            <table width="100%" cellpadding="0" cellspacing="0" style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 15px;">
+                <tr>
+                    <th style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; background-color: #f8f9fa; font-weight: bold; color: #2c3e50;">티커</th>
+                    <th style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; background-color: #f8f9fa; font-weight: bold; color: #2c3e50;">규모</th>
+                    <th style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; background-color: #f8f9fa; font-weight: bold; color: #2c3e50;">섹터(대분류)</th>
+                    <th style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; background-color: #f8f9fa; font-weight: bold; color: #2c3e50;">Z-Score</th>
+                    <th style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; background-color: #f8f9fa; font-weight: bold; color: #2c3e50;">빈도 (주/월)</th>
+                </tr>
                 {% if whale_alerts %}
                     {% for whale in whale_alerts[:15] %}
                     <tr>
-                        <td>
-                            <a href="https://finviz.com/quote.ashx?t={{ whale['ticker'] }}" target="_blank" class="ticker-link">
-                                <span class="badge badge-ticker">{{ whale['ticker'] }}</span>
+                        <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center;">
+                            <a href="https://finviz.com/quote.ashx?t={{ whale['ticker'] }}" target="_blank" style="text-decoration: none;">
+                                <span style="display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; color: white; background-color: #34495e;">{{ whale['ticker'] }}</span>
                             </a>
                         </td>
-                        <td style="font-size: 12px; font-weight: bold; color: #8e44ad;">{{ whale['size'] }}</td>
-                        <td style="color: #666; font-size: 13px;">{{ whale['sector'] }}</td>
-                        <td style="color: #c0392b; font-weight: bold;">{{ whale['z_score'] }}</td>
-                        <td style="font-size: 13px;">{{ whale['weekly_freq'] }}회 / {{ whale['monthly_freq'] }}회</td>
+                        <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; font-size: 12px; font-weight: bold; color: #8e44ad;">{{ whale['size'] }}</td>
+                        <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; color: #666; font-size: 13px;">{{ whale['sector'] }}</td>
+                        <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; color: #c0392b; font-weight: bold;">{{ whale['z_score'] }}</td>
+                        <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; font-size: 13px;">{{ whale['weekly_freq'] }}회 / {{ whale['monthly_freq'] }}회</td>
                     </tr>
                     {% endfor %}
                 {% else %}
-                    <tr><td colspan="5" style="color: #999; padding: 20px;">포착된 내역이 없습니다.</td></tr>
+                    <tr><td colspan="5" style="padding: 20px; border-bottom: 1px solid #ddd; text-align: center; color: #999;">포착된 내역이 없습니다.</td></tr>
                 {% endif %}
             </table>
 
-            <div class="sub-title" style="margin-top: 30px;">📈 활동성 급증 종목 (Z-score < 2.0)</div>
-            <p class="guide-text">
+            <div style="font-size: 16px; font-weight: bold; margin: 30px 0 10px 0; color: #34495e;">📈 활동성 급증 종목 (Z-score < 2.0)</div>
+            <p style="font-size: 14px; color: #7f8c8d; margin-top: 5px; margin-bottom: 15px; line-height: 1.6;">
                 단순 과매수 또는 시장 관심으로 인해 거래량이 평소보다 증가했으나, 통계적 이상 범위(2.0)에는 미치지 못하는 종목입니다. (상위 10개)
             </p>
-            <table>
-                <tr><th>티커</th><th>규모</th><th>섹터(대분류)</th><th>Z-Score</th><th>상태</th></tr>
+            <table width="100%" cellpadding="0" cellspacing="0" style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 15px;">
+                <tr>
+                    <th style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; background-color: #f8f9fa; font-weight: bold; color: #2c3e50;">티커</th>
+                    <th style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; background-color: #f8f9fa; font-weight: bold; color: #2c3e50;">규모</th>
+                    <th style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; background-color: #f8f9fa; font-weight: bold; color: #2c3e50;">섹터(대분류)</th>
+                    <th style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; background-color: #f8f9fa; font-weight: bold; color: #2c3e50;">Z-Score</th>
+                    <th style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; background-color: #f8f9fa; font-weight: bold; color: #2c3e50;">상태</th>
+                </tr>
                 {% if normal_alerts %}
                     {% for item in normal_alerts[:10] %}
                     <tr>
-                        <td>
-                            <a href="https://finviz.com/quote.ashx?t={{ item['ticker'] }}" target="_blank" class="ticker-link">
-                                <span class="badge badge-ticker" style="background-color: #3e4766;">{{ item['ticker'] }}</span>
+                        <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center;">
+                            <a href="https://finviz.com/quote.ashx?t={{ item['ticker'] }}" target="_blank" style="text-decoration: none;">
+                                <span style="display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; color: white; background-color: #3e4766;">{{ item['ticker'] }}</span>
                             </a>
                         </td>
-                        <td style="font-size: 12px; font-weight: bold; color: #8e44ad;">{{ item['size'] }}</td>
-                        <td style="color: #666; font-size: 13px;">{{ item['sector'] }}</td>
-                        <td style="color: #a74d4d; font-weight: bold;">{{ item['z_score'] }}</td>
-                        <td style="font-size: 13px; color: #27ae60;">활동성 증가</td>
+                        <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; font-size: 12px; font-weight: bold; color: #8e44ad;">{{ item['size'] }}</td>
+                        <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; color: #666; font-size: 13px;">{{ item['sector'] }}</td>
+                        <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; color: #a74d4d; font-weight: bold;">{{ item['z_score'] }}</td>
+                        <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; font-size: 13px; color: #27ae60;">활동성 증가</td>
                     </tr>
                     {% endfor %}
                 {% else %}
-                    <tr><td colspan="5" style="color: #999; padding: 20px;">포착된 내역이 없습니다.</td></tr>
+                    <tr><td colspan="5" style="padding: 20px; border-bottom: 1px solid #ddd; text-align: center; color: #999;">포착된 내역이 없습니다.</td></tr>
                 {% endif %}
             </table>
 
             {% if insider_trades %}
-            <div class="sub-title" style="margin-top: 40px;">🕵️ 내부자 거래 동향 (최근 30일)</div>
-            <p class="guide-text">
+            <div style="font-size: 16px; font-weight: bold; margin: 40px 0 10px 0; color: #34495e;">🕵️ 내부자 거래 동향 (최근 30일)</div>
+            <p style="font-size: 14px; color: #7f8c8d; margin-top: 5px; margin-bottom: 15px; line-height: 1.6;">
                 티커, 분야(세부 산업), 그리고 집단 매수거나 주요 매수/매도일 경우 총 거래금과 직급을 명시합니다.
             </p>
 
-            <div style="margin-top: 10px; margin-bottom: 25px; padding: 15px; background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: 5px; font-size: 15px; color: #6c757d; line-height: 1.8;">
+            <div style="margin-top: 10px; margin-bottom: 25px; padding: 15px; background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: 5px; font-size: 14px; color: #6c757d; line-height: 1.8;">
                 <strong>[내부자 거래 필터링 기준 안내]</strong><br>
                 • <b>1차 필터링</b>: 장내 매수, 단순 매도만 허용 / 동전주 방지 (주가 $3↑, 매수 $150k↑, 매도 $500k↑)<br>
                 • <b>2차 필터링</b>: 재무 건전성 필터링 (시가총액 3500억↑, 일 거래대금 35억↑)<br>
                 • <b>리포팅 분류</b>: 집단 매수 (최근 30일 내 3명 이상 매수), 주요 매수 ($150k 이상 매수 및 C-level), 대량 매도 ($500k 이상)
             </div>
             
-            <div style="margin-top: 15px; font-weight: bold; color: #d35400;">👑 Cluster Buy (집단 매수)</div>
-            <table>
-                <tr><th>티커</th><th>세부 산업</th><th>내부자 (직급)</th><th>거래금</th></tr>
+            <div style="font-size: 15px; font-weight: bold; color: #d35400; margin-top: 15px; margin-bottom: 10px;">👑 Cluster Buy (집단 매수)</div>
+            <table width="100%" cellpadding="0" cellspacing="0" style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 15px;">
+                <tr>
+                    <th style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; background-color: #f8f9fa; font-weight: bold; color: #2c3e50;">티커</th>
+                    <th style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; background-color: #f8f9fa; font-weight: bold; color: #2c3e50;">세부 산업</th>
+                    <th style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; background-color: #f8f9fa; font-weight: bold; color: #2c3e50;">내부자 (직급)</th>
+                    <th style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; background-color: #f8f9fa; font-weight: bold; color: #2c3e50;">거래금</th>
+                </tr>
                 {% if insider_trades['cluster_buys'] %}
                     {% for trade in insider_trades['cluster_buys'] %}
                     <tr>
-                        <td>
+                        <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center;">
                             <a href="https://finviz.com/quote.ashx?t={{ trade['ticker'] }}" target="_blank" style="text-decoration: none;">
-                                <span class="badge badge-ticker">{{ trade['ticker'] }}</span>
+                                <span style="display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; color: white; background-color: #34495e;">{{ trade['ticker'] }}</span>
                             </a>
                         </td>
-                        <td style="font-size: 12px; color: #666;">{{ trade['industry'] }}</td>
-                        <td style="text-align: left; font-size: 13px;">{{ trade['name'] }} ({{ trade['role'] }})</td>
-                        <td style="color: #27ae60; font-weight: bold;">{{ trade['amount_str'] }}</td>
+                        <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; font-size: 12px; color: #666;">{{ trade['industry'] }}</td>
+                        <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: left; font-size: 13px;">{{ trade['name'] }} ({{ trade['role'] }})</td>
+                        <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; color: #27ae60; font-weight: bold;">{{ trade['amount_str'] }}</td>
                     </tr>
                     {% endfor %}
                 {% else %}
-                    <tr><td colspan="4" style="color: #999; padding: 20px;">포착된 내역이 없습니다.</td></tr>
+                    <tr><td colspan="4" style="padding: 20px; border-bottom: 1px solid #ddd; text-align: center; color: #999;">포착된 내역이 없습니다.</td></tr>
                 {% endif %}
             </table>
 
-            <div style="margin-top: 20px; font-weight: bold; color: #2980b9;">💎 주요 매수 (Significant Buy)</div>
-            <table>
-                <tr><th>티커</th><th>세부 산업</th><th>내부자 (직급)</th><th>거래금</th></tr>
+            <div style="font-size: 15px; font-weight: bold; color: #2980b9; margin-top: 20px; margin-bottom: 10px;">💎 주요 매수 (Significant Buy)</div>
+            <table width="100%" cellpadding="0" cellspacing="0" style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 15px;">
+                <tr>
+                    <th style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; background-color: #f8f9fa; font-weight: bold; color: #2c3e50;">티커</th>
+                    <th style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; background-color: #f8f9fa; font-weight: bold; color: #2c3e50;">세부 산업</th>
+                    <th style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; background-color: #f8f9fa; font-weight: bold; color: #2c3e50;">내부자 (직급)</th>
+                    <th style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; background-color: #f8f9fa; font-weight: bold; color: #2c3e50;">거래금</th>
+                </tr>
                 {% if insider_trades['major_buys'] %}
                     {% for trade in insider_trades['major_buys'] %}
                     <tr>
-                        <td>
+                        <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center;">
                             <a href="https://finviz.com/quote.ashx?t={{ trade['ticker'] }}" target="_blank" style="text-decoration: none;">
-                                <span class="badge badge-ticker">{{ trade['ticker'] }}</span>
+                                <span style="display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; color: white; background-color: #34495e;">{{ trade['ticker'] }}</span>
                             </a>
                         </td>
-                        <td style="font-size: 12px; color: #666;">{{ trade['industry'] }}</td>
-                        <td style="text-align: left; font-size: 13px;">{{ trade['name'] }} ({{ trade['role'] }})</td>
-                        <td style="color: #27ae60; font-weight: bold;">{{ trade['amount_str'] }}</td>
+                        <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; font-size: 12px; color: #666;">{{ trade['industry'] }}</td>
+                        <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: left; font-size: 13px;">{{ trade['name'] }} ({{ trade['role'] }})</td>
+                        <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; color: #27ae60; font-weight: bold;">{{ trade['amount_str'] }}</td>
                     </tr>
                     {% endfor %}
                 {% else %}
-                    <tr><td colspan="4" style="color: #999; padding: 20px;">포착된 내역이 없습니다.</td></tr>
+                    <tr><td colspan="4" style="padding: 20px; border-bottom: 1px solid #ddd; text-align: center; color: #999;">포착된 내역이 없습니다.</td></tr>
                 {% endif %}
             </table>
 
-            <div style="margin-top: 20px; font-weight: bold; color: #8e44ad;">📉 대량 매도 (Big Sell)</div>
-            <table>
-                <tr><th>티커</th><th>세부 산업</th><th>내부자 (직급)</th><th>거래금</th></tr>
+            <div style="font-size: 15px; font-weight: bold; color: #8e44ad; margin-top: 20px; margin-bottom: 10px;">📉 대량 매도 (Big Sell)</div>
+            <table width="100%" cellpadding="0" cellspacing="0" style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 15px;">
+                <tr>
+                    <th style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; background-color: #f8f9fa; font-weight: bold; color: #2c3e50;">티커</th>
+                    <th style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; background-color: #f8f9fa; font-weight: bold; color: #2c3e50;">세부 산업</th>
+                    <th style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; background-color: #f8f9fa; font-weight: bold; color: #2c3e50;">내부자 (직급)</th>
+                    <th style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; background-color: #f8f9fa; font-weight: bold; color: #2c3e50;">거래금</th>
+                </tr>
                 {% if insider_trades['big_sells'] %}
                     {% for trade in insider_trades['big_sells'] %}
                     <tr>
-                        <td>
+                        <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center;">
                             <a href="https://finviz.com/quote.ashx?t={{ trade['ticker'] }}" target="_blank" style="text-decoration: none;">
-                                <span class="badge badge-ticker">{{ trade['ticker'] }}</span>
+                                <span style="display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; color: white; background-color: #34495e;">{{ trade['ticker'] }}</span>
                             </a>
                         </td>
-                        <td style="font-size: 12px; color: #666;">{{ trade['industry'] }}</td>
-                        <td style="text-align: left; font-size: 13px;">{{ trade['name'] }} ({{ trade['role'] }})</td>
-                        <td style="color: #c0392b; font-weight: bold;">{{ trade['amount_str'] }}</td>
+                        <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; font-size: 12px; color: #666;">{{ trade['industry'] }}</td>
+                        <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: left; font-size: 13px;">{{ trade['name'] }} ({{ trade['role'] }})</td>
+                        <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; color: #c0392b; font-weight: bold;">{{ trade['amount_str'] }}</td>
                     </tr>
                     {% endfor %}
                 {% else %}
-                    <tr><td colspan="4" style="color: #999; padding: 20px;">포착된 내역이 없습니다.</td></tr>
+                    <tr><td colspan="4" style="padding: 20px; border-bottom: 1px solid #ddd; text-align: center; color: #999;">포착된 내역이 없습니다.</td></tr>
                 {% endif %}
             </table>
             {% endif %}
         </div>
         {% endif %}
 
-        <div class="footer">
+        <div style="text-align: center; font-size: 12px; color: #999; margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px;">
             본 리포트는 AI에 의해 자동 생성되었으며, 투자의 참고 자료로만 활용하시기 바랍니다.<br>
             문의사항: tkdgur7234@kakao.com<br>
             Created by SangHyeok Park | FinSight Agent © 2026

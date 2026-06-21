@@ -1,5 +1,6 @@
 import os
 import markdown
+import re
 from datetime import datetime, timedelta
 import pytz # 시간대 처리를 위해 추가
 from jinja2 import Environment, FileSystemLoader
@@ -22,6 +23,13 @@ def generate_email_report():
     print("Creating Index Table...")
     md_table = get_market_summary_markdown()
     html_table = markdown.markdown(md_table, extensions=['tables'])
+
+    # [수정] 정규식(Regex)을 사용하여 테이블 선 깨짐 완벽 방지
+    html_table = html_table.replace('<table>', '<table width="100%" cellpadding="0" cellspacing="0" style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 15px;">')
+    html_table = re.sub(r'<th[^>]*>', '<th style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; background-color: #f8f9fa; font-weight: bold; color: #2c3e50;">', html_table)
+    html_table = re.sub(r'<td[^>]*>', '<td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center;">', html_table)
+    # 혹시 모를 누락을 위해 tr에도 테두리 추가
+    html_table = re.sub(r'<tr[^>]*>', '<tr style="border-bottom: 1px solid #ddd;">', html_table)
 
     # [1-2] S&P 500 맵
     print("Fetching Map Image...")
