@@ -1,130 +1,82 @@
 {
-  "name": "StockSense",
+  "name": "StockMarket_Reporter",
   "nodes": [
     {
       "parameters": {},
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
       "position": [
-        -928,
+        -240,
         0
       ],
-      "id": "acb4468c-9778-484d-99fc-1f78846ad81d",
+      "id": "69e2095b-ee6e-4b8f-b166-42891da69c4d",
       "name": "When clicking ‘Execute workflow’"
     },
     {
       "parameters": {
-        "jsCode": "// 1. 설정\nconst tickers = {\n  \"다우 존스\": \"^DJI\",\n  \"S&P 500\": \"^GSPC\",\n  \"나스닥\": \"^IXIC\",\n  \"러셀 2000\": \"^RUT\",\n  \"WTI 원유\": \"CL=F\",\n  \"금\": \"GC=F\",\n  \"비트코인\": \"BTC-USD\",\n  \"미 국채 10년\": \"^TNX\",\n  \"달러 인덱스\": \"DX-Y.NYB\"\n};\n\nconst results = [];\nconst requests = [];\n\n// 2. 비동기 요청 준비 (병렬 처리로 속도 최적화)\nfor (const [name, symbol] of Object.entries(tickers)) {\n  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=2d`;\n  \n  // n8n 내장 HTTP Helper 사용\n  const requestPromise = this.helpers.httpRequest({\n    method: 'GET',\n    url: url,\n    headers: {\n      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'\n    },\n    json: true\n  })\n  .then(response => {\n    // 성공 시 데이터 파싱\n    const meta = response.chart.result[0].meta;\n    const currentPrice = meta.regularMarketPrice;\n    const prevClose = meta.chartPreviousClose;\n\n    const changeAmount = currentPrice - prevClose;\n    const changePct = (changeAmount / prevClose) * 100;\n\n    const emoji = changePct >= 0 ? \"🔴\" : \"🔵\";\n    const sign = changePct >= 0 ? \"+\" : \"\";\n\n    // 포맷팅\n    let priceStr = \"\";\n    if ([\"^TNX\", \"DX-Y.NYB\"].includes(symbol)) {\n      priceStr = currentPrice.toFixed(3);\n    } else if (symbol === \"BTC-USD\") {\n      priceStr = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(currentPrice);\n    } else {\n      priceStr = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(currentPrice);\n    }\n\n    return `| ${name} | ${priceStr} | ${emoji} ${sign}${changePct.toFixed(2)}% |`;\n  })\n  .catch(error => {\n    // 실패 시 에러 로그 반환\n    return `| ${name} | Error | ⚠️ ${error.message} |`;\n  });\n\n  requests.push(requestPromise);\n}\n\n// 3. 모든 요청 병렬 실행 및 대기\nconst rows = await Promise.all(requests);\n\n// 4. 테이블 생성\nlet markdownTable = \"| 지표 | 현재가 | 변동률 |\\n| :--- | :---: | :---: |\\n\";\nmarkdownTable += rows.join(\"\\n\");\n\nreturn [\n  {\n    json: {\n      market_summary_markdown: markdownTable\n    }\n  }\n];"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -720,
-        -144
-      ],
-      "id": "648e0dfc-d4f8-4d3b-8956-10f4d7e44db1",
-      "name": "Indicators"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "815cef79-538f-4186-afd8-b472e23519f0",
-              "leftValue": "={{ $json['필터링(전일 발표)'] }}",
-              "rightValue": "={{ $now.setZone('Asia/Seoul').minus({ days: 1 }).toFormat('yyyy-MM-dd') }}",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
+        "fromEmail": "slayers1357@gmail.com",
+        "toEmail": "tkdgur7234@naver.com",
+        "subject": "=[FinSight] 🇺🇸 {{ $now.setZone('Asia/Seoul').toFormat('MM월 dd일') }} 미국 증시 데일리 브리핑",
+        "html": "={{ $json.data }}",
         "options": {}
       },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
       "position": [
-        -544,
-        176
+        400,
+        0
       ],
-      "id": "f3f0d9f2-8073-4762-aae5-c7ee1232709d",
-      "name": "If"
+      "id": "d9f03fc5-e0bf-4ff8-adc8-274dfa3713ee",
+      "name": "Send email",
+      "webhookId": "13d9e9c0-b3f0-44c1-8382-d10387011e1e",
+      "credentials": {
+        "smtp": {
+          "id": "lp2iS5L1RDW8JGkV",
+          "name": "SMTP account"
+        }
+      }
     },
     {
       "parameters": {
-        "url": "https://api.apiflash.com/v1/urltoimage",
-        "sendQuery": true,
-        "queryParameters": {
-          "parameters": [
+        "rule": {
+          "interval": [
             {
-              "name": "access_key",
-              "value": "7c895cc29c9a4264bf1a8c8397affc34"
-            },
-            {
-              "name": "url",
-              "value": "https://finviz.com/map.ashx?t=sec"
-            },
-            {
-              "name": "fomat",
-              "value": "png"
-            },
-            {
-              "name": "quality",
-              "value": "100"
-            },
-            {
-              "name": "width",
-              "value": "1920"
-            },
-            {
-              "name": "height",
-              "value": "1080"
-            },
-            {
-              "name": "response_type",
-              "value": "image"
-            },
-            {
-              "name": "element",
-              "value": "#canvas-wrapper"
-            },
-            {
-              "name": "wait_until",
-              "value": "page_loaded"
+              "field": "weeks",
+              "triggerAtDay": [
+                2,
+                3,
+                4,
+                5,
+                6
+              ],
+              "triggerAtHour": 9
             }
           ]
-        },
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -112,
+        -144
+      ],
+      "id": "41e15418-e1ee-4b41-acde-b3b16cd5cff9",
+      "name": "Trading Day"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://172.17.0.1:8000/report/daily-briefing",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.3,
       "position": [
-        -720,
+        80,
         0
       ],
-      "id": "5a48804e-41c9-43ed-9edb-7bd3c3d647d5",
-      "name": "S&P 500 map (api)"
-    },
-    {
-      "parameters": {
-        "jsCode": "// 1. 지표 설정\nconst indicatorMap = {\n  \"CPIAUCSL\": { name: \"소비자물가지수 (CPI)\", units: \"pc1\", suffix: \"%\", decimal: 1, ff_title: \"CPI y/y\" },\n  \"PPIFIS\":   { name: \"생산자물가지수 (PPI)\", units: \"pc1\", suffix: \"%\", decimal: 1, ff_title: \"PPI m/m\" },\n  \"PCEPI\":    { name: \"개인소비지출 (PCE)\", units: \"pc1\", suffix: \"%\", decimal: 1, ff_title: \"Core PCE Price Index m/m\" },\n  \"PAYEMS\":   { name: \"비농업 고용지수 (NFP)\", units: \"chg\", suffix: \"K\", decimal: 0, ff_title: \"Non-Farm Employment Change\" },\n  \"ICSA\":     { name: \"신규 실업수당 청구\", units: \"lin\", suffix: \"K\", divide: 1000, decimal: 0, ff_title: \"Unemployment Claims\" },\n  \"RSAFS\":    { name: \"소매 판매\", units: \"pch\", suffix: \"%\", decimal: 1, ff_title: \"Retail Sales m/m\" },\n  \"DFEDTARU\": { name: \"기준금리 (FOMC)\", units: \"lin\", suffix: \"%\", decimal: 2, ff_title: \"Federal Funds Rate\" } \n};\n\nconst apiKey = 'f5bdb1b66a00ec81ec6b44282bcb12a8';\nconst requests = [];\n\n// --- [Step 1] FRED 데이터 요청 ---\nfor (const [sid, info] of Object.entries(indicatorMap)) {\n  const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${sid}&units=${info.units}&sort_order=desc&limit=1&api_key=${apiKey}&file_type=json`;\n  \n  requests.push(\n    this.helpers.httpRequest({ url, json: true })\n      .then(res => {\n        if (res.observations && res.observations.length > 0) {\n          const obs = res.observations[0];\n          let val = parseFloat(obs.value);\n          const divisor = info.divide || 1;\n          val = val / divisor;\n          const decimalPlaces = (info.decimal !== undefined) ? info.decimal : 2;\n          \n          const formattedNum = val.toLocaleString(undefined, { \n              minimumFractionDigits: decimalPlaces, \n              maximumFractionDigits: decimalPlaces \n          });\n\n          // [기준월 포맷팅 수정 V10]\n          // FRED 날짜 원본: \"2025-12-13\" (YYYY-MM-DD)\n          // 목표: \"25-12-13\" 또는 \"25-11\"\n          \n          let formattedRefDate = \"\";\n          \n          if (sid !== 'ICSA') {\n              // 월간 지표: \"2025-11-01\" -> \"25-11\"\n              formattedRefDate = obs.date.slice(2, 7); \n          } else {\n              // 주간 지표: \"2025-12-13\" -> \"25-12-13\" (앞 2자리 잘라냄)\n              formattedRefDate = obs.date.slice(2); \n          }\n\n          return { \n            name: info.name, \n            value: val, \n            displayValue: formattedNum + info.suffix, \n            refDate: formattedRefDate, \n            ff_title: info.ff_title\n          };\n        }\n        return null;\n      }).catch(() => null)\n  );\n}\n\n// --- [Step 2] Forex Factory XML 요청 ---\nconst ffUrl = `https://nfs.faireconomy.media/ff_calendar_thisweek.xml?t=${new Date().getTime()}`;\nconst ffRequest = this.helpers.httpRequest({ url: ffUrl })\n  .then(xmlStr => {\n    const items = [];\n    const regex = /<event>([\\s\\S]*?)<\\/event>/g;\n    let match;\n    while ((match = regex.exec(xmlStr)) !== null) {\n      const block = match[1];\n      const getTag = (tag) => {\n        const m = block.match(new RegExp(`<${tag}>(.*?)<\\/${tag}>`));\n        if (m && m[1]) return m[1].replace('<![CDATA[', '').replace(']]>', '');\n        return null;\n      };\n\n      const country = getTag('country');\n      if (country !== 'USD') continue;\n\n      const title = getTag('title');\n      const forecastStr = getTag('forecast'); \n      const dateStr = getTag('date'); \n      const timeStr = getTag('time'); \n      const impact = getTag('impact');\n      \n      if (title && forecastStr && dateStr && timeStr) {\n        let cleanStr = forecastStr.replace(/[%K]/g, '');\n        let forecastNum = parseFloat(cleanStr); \n        \n        // [시차 보정] UTC + 9 = KST\n        let hour = 0;\n        let minute = 0;\n        if (timeStr.includes('am') || timeStr.includes('pm')) {\n            const timeParts = timeStr.match(/(\\d+):(\\d+)(am|pm)/);\n            if (timeParts) {\n                hour = parseInt(timeParts[1]);\n                minute = parseInt(timeParts[2]);\n                const ampm = timeParts[3];\n                if (ampm === 'pm' && hour < 12) hour += 12;\n                if (ampm === 'am' && hour === 12) hour = 0;\n            }\n        }\n\n        const [mm, dd, yyyy] = dateStr.split('-').map(Number);\n        const baseTime = Date.UTC(yyyy, mm - 1, dd, hour, minute);\n        const kstTime = baseTime + (9 * 60 * 60 * 1000); \n        const kstDateObj = new Date(kstTime);\n\n        // 포맷팅\n        const pad = (n) => n.toString().padStart(2, '0');\n        const kstYear = kstDateObj.getUTCFullYear();\n        const kstMonth = pad(kstDateObj.getUTCMonth() + 1);\n        const kstDay = pad(kstDateObj.getUTCDate());\n        const kstHour = pad(kstDateObj.getUTCHours());\n        const kstMinute = pad(kstDateObj.getUTCMinutes());\n\n        const kstFullStr = `${kstYear}-${kstMonth}-${kstDay} ${kstHour}:${kstMinute}`;\n        const kstDateStr = `${kstYear}-${kstMonth}-${kstDay}`; // 필터용 (YYYY-MM-DD 유지)\n\n        if (!isNaN(forecastNum)) {\n            items.push({ \n                title: title, \n                forecast: forecastNum, \n                forecastStr: forecastStr,\n                impact: impact,\n                kstDateObj: kstDateObj, \n                kstDateStr: kstDateStr, \n                kstFullStr: kstFullStr \n            });\n        }\n      }\n    }\n    return items;\n  }).catch(() => []); \n\nrequests.push(ffRequest);\n\n// --- [Step 3] 데이터 병합 ---\nconst results = await Promise.all(requests);\nconst fredData = results.slice(0, results.length - 1).filter(i => i !== null);\nconst ffData = results[results.length - 1]; \n\nconst outputItems = [];\n\nfredData.forEach(item => {\n  let valDisplay = item.displayValue; \n  let releaseDateDisplay = \"-\"; \n  let kstFilterDate = \"-\"; \n  let impactDisplay = \"-\"; \n  let forecastDisplay = \"-\";\n\n  const matchedFF = ffData.find(ff => ff.title.includes(item.ff_title));\n  \n  if (matchedFF) {\n    releaseDateDisplay = matchedFF.kstFullStr; \n    kstFilterDate = matchedFF.kstDateStr;      \n    forecastDisplay = matchedFF.forecastStr;\n\n    if (matchedFF.impact === 'High') impactDisplay = \"🔴 High\";\n    else if (matchedFF.impact === 'Medium') impactDisplay = \"🟠 Med\";\n    else if (matchedFF.impact === 'Low') impactDisplay = \"🟡 Low\";\n    else impactDisplay = matchedFF.impact || \"-\";\n\n    const diff = item.value - matchedFF.forecast;\n    if (diff > 0.05) { \n         valDisplay = `<span style=\"color: #e74c3c;\"><b>${item.displayValue}</b></span>`;\n    } else if (diff < -0.05) { \n         valDisplay = `<span style=\"color: #3498db;\"><b>${item.displayValue}</b></span>`;\n    } \n  }\n\n  outputItems.push({\n    json: {\n      \"지표명\": item.name,\n      \"발표값\": valDisplay,\n      \"예상\": forecastDisplay,\n      \"기준월\": item.refDate, // 25-11 또는 25-12-13\n      \"발표일(KST)\": releaseDateDisplay,\n      \"필터링(전일 발표)\": kstFilterDate,\n      \"중요도\": impactDisplay\n    }\n  });\n});\n\nreturn outputItems;"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -720,
-        176
-      ],
-      "id": "4acca825-0009-4cd4-a537-9bce61392c07",
-      "name": "released main index (api)"
+      "id": "c2accdc0-9f4a-4bf0-a543-230a1fbbc43d",
+      "name": "Create Report"
     }
   ],
   "pinData": {},
@@ -133,28 +85,29 @@
       "main": [
         [
           {
-            "node": "Indicators",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "S&P 500 map (api)",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "released main index (api)",
+            "node": "Create Report",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "released main index (api)": {
+    "Trading Day": {
       "main": [
         [
           {
-            "node": "If",
+            "node": "Create Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Report": {
+      "main": [
+        [
+          {
+            "node": "Send email",
             "type": "main",
             "index": 0
           }
@@ -162,14 +115,15 @@
       ]
     }
   },
-  "active": false,
+  "active": true,
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "e61e6abe-0073-4cc8-ad18-f2a93d9d3c19",
+  "versionId": "94c126c3-2e3c-4109-961f-7ab535fd03d7",
   "meta": {
+    "templateCredsSetupCompleted": true,
     "instanceId": "c6d4f87b36491a3b925485bdcb8cc6587d1037c14ecef57dfc66a9b2b602f46f"
   },
-  "id": "NRAhqmVLooYLz61g",
+  "id": "zXwGQQ3dVUByCNu4",
   "tags": []
 }
