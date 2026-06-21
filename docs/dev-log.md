@@ -394,7 +394,7 @@ api 키 입력
   - 상장폐지 되었거나 OTC 주식에 대한 로그
     → HTTP Error 404: {"quoteSummary":{"result":null,"error":{"code":"Not Found","description":"Quote not found for symbol: AB.LE"}}}
 
-### (2) 3 과정 HTML 병합 테이블 명시
+### (2) 3번 기능 HTML 병합 테이블 명시
 
 - 3-1  
   Finviz(링크 포함)의 Rel Volume으로 1차 포착 후,  
@@ -406,10 +406,31 @@ api 키 입력
   집단 매수거나 주요 매수라면  
   총 거래금과 직급 명시
 
-## 26-05-10
-
 ### 모든 과정 HTML로 기능 통합
 
+---
+
+## 26-06-21
+
+### 2-1. 관심 종목 커뮤니티 감성 분석 - 크롤링 로직 강화
+
+- Reddit 크롤링 차단 로직이 너무 강력해
+  requests.Session()과 time.sleep() 이용해 크롤링 강화
+
+---
+
+## 26-06-22
+
+### (1) n8n 자동 이메일 리포팅 시스템 완성
+  'Schedule Trigger'와 'Send email' 노드 이용
+  테스트용으로 구글 앱 비밀번호로 credential 생성
+  
+### (2) HTML 코드 수정 
+
+- 각 기능 목차 및 앵커 설정
+
+- 이메일 전송시 HTML 레이아웃 깨짐 현상 수정
+  웹브라우저 전용 '<style>'태그가 아닌 인라인 CSS 버전 사용
 
 ---
 
