@@ -1,5 +1,5 @@
 {
-  "name": "StockMarket_Reporter",
+  "name": "FinSight Agent",
   "nodes": [
     {
       "parameters": {},
@@ -14,8 +14,8 @@
     },
     {
       "parameters": {
-        "fromEmail": "slayers1357@gmail.com",
-        "toEmail": "tkdgur7234@naver.com",
+        "fromEmail": "your_email@gmail.com",
+        "toEmail": "receiver@naver.com",
         "subject": "=[FinSight] 🇺🇸 {{ $now.setZone('Asia/Seoul').toFormat('MM월 dd일') }} 미국 증시 데일리 브리핑",
         "html": "={{ $json.data }}",
         "options": {}
@@ -66,7 +66,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://172.17.0.1:8000/report/daily-briefing",
+        "url": "http://<YOUR_API_IP>:8000/report/daily-briefing",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequest",
