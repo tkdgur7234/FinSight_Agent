@@ -10,17 +10,21 @@ from dotenv import load_dotenv
 from routers import report
 
 
-# 1. 환경변수 로드
+# 1. Load environment variables
 load_dotenv()
+
+# [Added] Print the current language mode to the terminal for verification
+current_lang = os.getenv("REPORT_LANGUAGE", "en")
+print(f"🌍 Server starting... Report Language Mode: {current_lang.upper()}")
 
 app = FastAPI()
 
-# 라우터 등록 
+# Register router
 app.include_router(report.router)
 
 # ---------------------------------------------------------
-# [핵심] JSON 변환 에러 방지용 '청소기 함수'
-# 데이터 안에 숨어있는 NaN(Not a Number)을 찾아서 None(null)으로 바꿈
+# [Core] Cleaner function to prevent JSON serialization errors
+# Finds NaN (Not a Number) in the data and replaces it with None (null)
 # ---------------------------------------------------------
 def clean_data(data):
     if isinstance(data, dict):
@@ -29,7 +33,7 @@ def clean_data(data):
         return [clean_data(v) for v in data]
     elif isinstance(data, float):
         if math.isnan(data) or math.isinf(data):
-            return None  # NaN이나 무한대는 None으로 변경
+            return None  # Replace NaN or infinity with None
     return data
 # ---------------------------------------------------------
 
@@ -40,7 +44,7 @@ def health_check():
 @app.post("/StockMarket_Auto_Reporter")
 def get_StockMarket_Auto_Reporter():
     start_time = datetime.now()
-    print(f"[{start_time}] 🚀 데이터 요청 도착! 처리 시작...")
+    print(f"[{start_time}] 🚀 Data request received! Processing started...")
 
     target_tickers = {
         'S&P500': '^GSPC', 
@@ -52,20 +56,20 @@ def get_StockMarket_Auto_Reporter():
     result = {}
 
     try:
-        # yf.download 실행
+        # Execute yf.download
         df = yf.download(symbols, period="2d", group_by='ticker', threads=True, progress=False, auto_adjust=False)
 
         for name, symbol in target_tickers.items():
             try:
-                # 1. 데이터 추출
+                # 1. Extract data
                 if len(symbols) > 1:
                     data = df[symbol]
                 else:
                     data = df
                 
-                # 2. 유효성 검사 및 계산
+                # 2. Validation and calculation
                 if not data.empty:
-                    # 컬럼명 찾기 ('Close' 또는 'Adj Close')
+                    # Find column name ('Close' or 'Adj Close')
                     if 'Close' in data.columns:
                         price_col = 'Close'
                     elif 'Adj Close' in data.columns:
@@ -76,7 +80,7 @@ def get_StockMarket_Auto_Reporter():
                     last_close = float(data[price_col].iloc[-1])
                     prev_close = float(data[price_col].iloc[-2]) if len(data) >= 2 else last_close
                     
-                    # 변동률 계산
+                    # Calculate change rate
                     if prev_close != 0:
                         change_rate = ((last_close - prev_close) / prev_close) * 100
                     else:
@@ -94,17 +98,17 @@ def get_StockMarket_Auto_Reporter():
 
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
-        print(f"[{end_time}] ✅ 처리 완료! (소요시간: {duration}초)")
+        print(f"[{end_time}] ✅ Processing complete! (Duration: {duration} sec)")
 
-        # 3. 응답 데이터 구성
+        # 3. Construct response data
         response_data = {
             "timestamp": end_time.strftime("%Y-%m-%d %H:%M:%S"),
             "data": result,
             "performance": f"{duration} sec",
-            "message": "데이터 수집 성공"
+            "message": "Data collection successful"
         }
 
-        # [중요] 마지막에 청소기 돌려서 내보내기 (NaN -> None)
+        # [Important] Run cleaner before returning (NaN -> None)
         return clean_data(response_data)
 
     except Exception as e:
