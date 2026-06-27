@@ -1,16 +1,18 @@
 # backend/services/sentiment_analysis.py
 
 import feedparser
+import cloudscraper # [Added] For bypassing Reddit's bot protection
 import requests
 import os
 import json
 import re
-from datetime import datetime, time
+import time  # For time.sleep()
+from datetime import datetime
 from time import mktime
 from bs4 import BeautifulSoup
 from openai import OpenAI
 from dotenv import load_dotenv
-
+import random
 load_dotenv()
 
 # =========================================================
@@ -191,13 +193,10 @@ def check_volume_spike(ticker, posts, default_velocity):
         return status, round(current_velocity, 1)
     except Exception as e:
         print(f"Calc Error: {e}")
-        return "Calc Error", 0
+        return "Calc Error", 0 
 
-import time
-import random 
-
-# Create a Session object to maintain cookies and connection state
-reddit_session = requests.Session()
+# [Updated] Use cloudscraper instead of requests.Session() to bypass Reddit's bot protection
+reddit_session = cloudscraper.create_scraper()
 
 def get_reddit_posts(ticker, limit):
     rss_url = f"https://www.reddit.com/r/stocks+wallstreetbets+investing+technology/search.rss?q={ticker}&sort=new&restrict_sr=on&limit=100"
@@ -207,15 +206,19 @@ def get_reddit_posts(ticker, limit):
     
     max_retries = 3
     for attempt in range(max_retries):
-        # Enhance headers to appear more like a human (browser)
+        # [Updated] Enhanced headers to mimic a real Chrome browser perfectly
         headers = {
-            'User-Agent': f'MyFinBot_v1.{random.randint(100, 999)} (Contact: myemail@gmail.com)',
-            'Accept': 'application/rss+xml, application/xml, text/xml; q=0.9, */*; q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1'
         }
         
         try:
-            resp = reddit_session.get(rss_url, headers=headers, timeout=10)
+            # Use cloudscraper (reddit_session) to send the request
+            resp = reddit_session.get(rss_url, headers=headers, timeout=15)
             
             if resp.status_code == 200:
                 feed = feedparser.parse(resp.content)
@@ -301,50 +304,74 @@ def get_naver_posts(code, limit):
             break
     return posts
 
+def parse_json_safely(text):
+    """
+    Powerful JSON recovery logic: fixes broken brackets, handles newlines, 
+    and corrects missing commas.
+    """
+    try:
+        text = text.strip()
+        # 1. Remove markdown code blocks
+        text = re.sub(r'```json|```', '', text).strip()
+        
+        # 2. Force JSON structure correction (insert closing brackets if missing)
+        if text.count('[') > text.count(']'):
+            text += ']'
+        if text.count('{') > text.count('}'):
+            text += '}'
+            
+        # 3. Correct missing commas between list items caused by newlines
+        text = re.sub(r'\"[\s\n]+\"', '","', text)
+        
+        # 4. Force fix if JSON doesn't start with an array or object
+        start_idx = text.find('[')
+        end_idx = text.rfind(']') + 1
+        if start_idx == -1: # Try object if no array found
+            start_idx = text.find('{')
+            end_idx = text.rfind('}') + 1
+            
+        if start_idx != -1 and end_idx != -1:
+            text = text[start_idx:end_idx]
+            
+        return json.loads(text)
+    except Exception as e:
+        print(f"   ❌ [Critical] Failed to recover JSON parsing: {e}")
+        return []
+
 def summarize_with_llm(ticker, posts):
     api_key = os.getenv("UPSTAGE_API_KEY")
     client = OpenAI(api_key=api_key, base_url="https://api.upstage.ai/v1/solar")
 
-    full_content = "\n".join([f"- {p['text']}" for p in posts])
-    if len(full_content) > 3000:
-        full_content = full_content[:3000] + "...(truncated)"
+    # [Core] Limit to 50 posts to avoid token confusion
+    recent_posts = posts[:50]
+    full_content = "\n".join([f"- {p['text']}" for p in recent_posts])
 
-    # [Dynamic Language Setup] 프롬프트에 동적 언어 할당 및 예시 문장 동적 생성
+    # [Language Setup]
     lang_code = os.getenv("REPORT_LANGUAGE", "en").lower()
     target_lang = "Korean" if lang_code == "ko" else "English"
     
-    example_1 = "테슬라 자율주행 기술에 대한 혼란이 가중되고 있습니다." if lang_code == "ko" else "Confusion over Tesla's autonomous driving technology is growing."
-    example_2 = "단기 옵션 매도 시점에 대한 투자자들의 후회가 많습니다." if lang_code == "ko" else "Many investors regret the timing of selling short-term options."
-
+    # [Prompt] Added clear formatting constraints
     system_prompt = f"""
-    Analyze the comments about {ticker}.
-    Select exactly 10 most meaningful points.
+    Analyze comments about {ticker}.
+    Return exactly 10 key points.
     
-    CRITICAL RULES:
-    1. SUMMARIZE each point into just ONE short {target_lang} sentence (under 80 characters).
-    2. Output format MUST be a pure, valid JSON array of strings.
-    3. You MUST separate each string with a comma (,). Do NOT cut off the text.
-    
-    Example format:
-    ["{example_1}", "{example_2}"]
+    CRITICAL FORMATTING RULES:
+    1. Output ONLY a valid JSON array of strings: ["point1", "point2"].
+    2. NO markdown, NO explanations, NO extra text.
+    3. Each string MUST be under 40 characters in {target_lang}.
+    4. NO double quotes inside the text.
     """
+    
     try:
         response = client.chat.completions.create(
             model=MODEL_FAST,
             messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": full_content}],
-            temperature=0.1, 
+            temperature=0.0, 
             timeout=30,
-            max_tokens=1500 
+            max_tokens=1000 # 1000 tokens are sufficient for this task
         )
         
-        raw_content = response.choices[0].message.content
-        parsed_data = parse_json_safely(raw_content)
-        
-        if not parsed_data:
-            print(f"   ⚠️ [Debug] Parse failed for {ticker}. LLM raw response:\n{raw_content[:200]}...")
-            return []
-            
-        return parsed_data
+        return parse_json_safely(response.choices[0].message.content)
     except Exception as e:
         print(f"   ❌ LLM API Error ({ticker}): {e}")
         return []
@@ -359,8 +386,6 @@ def analyze_final_sentiment(ticker, key_sentences):
 
     sentences_text = "\n".join([f"{i+1}. {s}" for i, s in enumerate(key_sentences)])
     
-    # Note: JSON 키 이름인 "reason_korean"은 나중에 HTML 템플릿(UI) 변경 시 깨지지 않도록 일단 유지했습니다. 
-    # 값(Value) 자체는 target_lang(영어)으로 잘 번역되어 출력됩니다.
     system_prompt = f"""
     Analyze investor sentiment for {ticker}.
     Output JSON: {{ "score": <0-100>, "status": "<Extreme Fear/Fear/Neutral/Greed/Extreme Greed>", "reason_korean": "<Write the reason in {target_lang}>" }}
@@ -416,5 +441,8 @@ def get_sentiment_analysis():
             print(f"❌ [{stock.get('name')}] Error: {e}")
             continue
 
-        time.sleep(2)
+        # [Anti-Bot Strategy] Human-like behavior: Wait 8 to 20 seconds between requests
+        delay = random.uniform(8.0, 20.0)
+        print(f"   ⏳ [Anti-Bot] Waiting {delay:.1f}s before next stock...")
+        time.sleep(delay)
     return results

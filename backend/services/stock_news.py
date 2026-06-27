@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # =========================================================
-# ▼▼▼ [설정] 관심 종목 뉴스 리스트 ▼▼▼
+# ▼▼▼ [Configuration] Target Stock News List ▼▼▼
 # =========================================================
 TARGET_STOCKS = [
     {
@@ -27,17 +27,11 @@ TARGET_STOCKS = [
         "name": "Google",
         "lang": "en",
         "limit": 2
-    },
-    #{
-    #    "ticker": "005930",
-    #    "name": "삼성전자",
-    #    "lang": "ko",
-    #    "limit": 2
-    #}
+    }
 ]
 
 # =========================================================
-# ▼▼▼ [설정] 유료(Paywall) 뉴스 소스 블랙리스트 ▼▼▼
+# ▼▼▼ [Configuration] Paywalled News Sources Blacklist ▼▼▼
 # =========================================================
 PAYWALLED_SOURCES = [
     "Bloomberg",
@@ -54,15 +48,17 @@ PAYWALLED_SOURCES = [
 ]
 
 def clean_html(raw_html):
+    """Removes HTML tags from the string."""
     cleanr = re.compile('<.*?>')
     cleantext = re.sub(cleanr, '', raw_html)
     return unescape(cleantext).strip()
 
 def is_similar(a, b, threshold=0.5):
-    """제목 유사도 검사"""
+    """Checks similarity between two headlines."""
     return SequenceMatcher(None, a, b).ratio() > threshold
 
 def is_paywalled(source_name):
+    """Returns True if the news source is in the paywall blacklist."""
     if not source_name: return False
     source_lower = source_name.lower()
     for blocked in PAYWALLED_SOURCES:
@@ -72,10 +68,10 @@ def is_paywalled(source_name):
 
 def get_google_news_rss(query, lang="en", limit=2):
     """
-    구글 뉴스 RSS 크롤링 (상세 디버깅 로그 추가)
+    Fetches news from Google News RSS with advanced filtering.
     """
     
-    # 통계 집계용 변수
+    # Statistics tracker
     stats = {
         "total_fetched": 0,
         "dropped_paywall": 0,
@@ -84,7 +80,6 @@ def get_google_news_rss(query, lang="en", limit=2):
         "accepted": 0
     }
     
-    # 1. 넉넉하게 가져오기
     fetch_count = 15
     
     if lang == 'ko':
@@ -97,34 +92,27 @@ def get_google_news_rss(query, lang="en", limit=2):
         news_results = []
         seen_titles = [] 
         
-        # 시간 필터 설정
         kst_tz = pytz.timezone('Asia/Seoul')
         now_kst = datetime.now(kst_tz)
         cutoff_end = now_kst
         cutoff_start = now_kst - timedelta(hours=24) 
 
-        # 전체 가져온 개수 기록
         stats["total_fetched"] = len(feed.entries)
-        # print(f"   🔍 [Debug] '{query}' 원본 {stats['total_fetched']}개 발견")
 
         for entry in feed.entries:
-            # 목표 개수 채우면 중단
             if len(news_results) >= limit:
                 break
                 
             if len(seen_titles) >= fetch_count * 2:
                 break
 
-            # ---------------------------------------------------------
-            # [필터 1] 유료 매체(Paywall)
-            # ---------------------------------------------------------
+            # [Filter 1] Paywall Check
             source_name = entry.source.title if 'source' in entry else ""
             if is_paywalled(source_name):
                 stats["dropped_paywall"] += 1
-                # print(f"      🚫 [Skip:유료] {source_name}")
                 continue
 
-            # [필터 2] 날짜 정밀 필터링
+            # [Filter 2] Time Precision Filter
             pub_date_str = entry.published if 'published' in entry else ""
             try:
                 dt_obj = date_parser.parse(pub_date_str)
@@ -134,12 +122,11 @@ def get_google_news_rss(query, lang="en", limit=2):
                 
                 if not (cutoff_start <= article_dt_kst <= cutoff_end):
                     stats["dropped_time"] += 1
-                    # print(f"      ⏰ [Skip:시간] {article_dt_kst.strftime('%m-%d %H:%M')} (범위 밖)")
                     continue 
             except Exception:
                 continue 
 
-            # [필터 3] 중복 제거
+            # [Filter 3] Deduplication
             title = entry.title
             is_dup = False
             for seen in seen_titles:
@@ -149,10 +136,8 @@ def get_google_news_rss(query, lang="en", limit=2):
             
             if is_dup:
                 stats["dropped_dup"] += 1
-                # print(f"      👯 [Skip:중복] {title[:20]}...")
                 continue 
             
-            # -- 통과 --
             seen_titles.append(title)
             stats["accepted"] += 1
             
@@ -165,9 +150,8 @@ def get_google_news_rss(query, lang="en", limit=2):
                 "source": source_name or "Google News"
             })
             
-        # [최종 로그 출력] 왜 0개가 나왔는지 확인 가능
         if stats["accepted"] == 0:
-            print(f"   ⚠️ [Result] '{query}' 수집 0건! (원인: 시간탈락 {stats['dropped_time']}건, 유료탈락 {stats['dropped_paywall']}건, 중복탈락 {stats['dropped_dup']}건)")
+            print(f"   ⚠️ [Result] '{query}' collected 0 items! (Reasons: Time={stats['dropped_time']}, Paywall={stats['dropped_paywall']}, Dup={stats['dropped_dup']})")
             
         return news_results
 
@@ -177,7 +161,7 @@ def get_google_news_rss(query, lang="en", limit=2):
 
 def analyze_news_sentiment(stock_name, news_list):
     """
-    AI를 이용한 태깅, 중요도 평가, 키워드 볼드 처리
+    Analyzes sentiment, importance, and adds keyword emphasis using LLM.
     """
     if not news_list:
         return []
@@ -189,23 +173,27 @@ def analyze_news_sentiment(stock_name, news_list):
     for i, news in enumerate(news_list):
         news_context += f"[{i+1}] Source: {news['source']} | Title: {news['title']}\n"
 
+    # [Language Setup]
+    lang_code = os.getenv("REPORT_LANGUAGE", "en").lower()
+    target_lang = "Korean" if lang_code == "ko" else "English"
+
     system_prompt = f"""
     You are a professional Stock News Analyst for '{stock_name}'.
     Analyze the provided news headlines.
 
     Tasks:
-    1. **Sentiment**: Tag as '🟢 호재' (Good), '🔴 악재' (Bad), or '⚪ 중립' (Neutral).
-    2. **Importance**: Score from 1 (Trivial) to 5 (Critical Market Mover).
-    3. **Keywords**: Identify 1-2 key words in the title and wrap them with markdown bold (**word**).
-    4. **Translate**: If the title is in English, translate it to Korean naturally.
+    1. Sentiment: Tag as '🟢 Positive', '🔴 Negative', or '⚪ Neutral'.
+    2. Importance: Score from 1 (Trivial) to 5 (Critical Market Mover).
+    3. Keywords: Identify 1-2 key words in the title and wrap them with markdown bold (**word**).
+    4. Language: Output the results in {target_lang}.
 
     Output format must be a JSON list of objects:
     [
         {{
-            "sentiment": "🟢 호재",
+            "sentiment": "🟢 Positive",
             "importance": 4,
             "processed_title": "Tesla **Earnings** beat expectations...",
-            "korean_title": "테슬라 **실적** 예상치 상회..." 
+            "translated_title": "..." 
         }}
     ]
     """
@@ -227,19 +215,19 @@ def analyze_news_sentiment(stock_name, news_list):
         for i, item in enumerate(news_list):
             if i < len(analysis_result):
                 ai_data = analysis_result[i]
-                item["sentiment"] = ai_data.get("sentiment", "⚪ 중립")
+                item["sentiment"] = ai_data.get("sentiment", "⚪ Neutral")
                 item["importance"] = ai_data.get("importance", 1)
                 
-                # [수정] HTML 템플릿이 읽을 수 있도록 번역된 제목을 'title'에 바로 덮어씌웁니다.
-                korean_title = ai_data.get("korean_title")
+                # Apply processed title and ensure translation is set
+                translated_title = ai_data.get("translated_title")
                 processed_title = ai_data.get("processed_title")
                 
-                if korean_title and korean_title != item["title"]:
-                    item["title"] = korean_title
+                if translated_title and translated_title != item["title"]:
+                    item["title"] = translated_title
                 else:
                     item["title"] = processed_title or item["title"]
             else:
-                item["sentiment"] = "⚪ 중립"
+                item["sentiment"] = "⚪ Neutral"
                 
         return news_list
 
@@ -249,10 +237,10 @@ def analyze_news_sentiment(stock_name, news_list):
 
 def get_interested_stock_news():
     """
-    메인 실행 함수
+    Main execution function for collecting and analyzing news.
     """
-    print("📰 관심 종목 뉴스 수집 및 AI 분석 시작...")
-    results = [] # [수정] HTML이 읽기 쉽도록 1차원 리스트로 구성
+    print("📰 Starting stock news collection and AI analysis...")
+    results = []
 
     for stock in TARGET_STOCKS:
         ticker = stock["ticker"]
@@ -260,17 +248,16 @@ def get_interested_stock_news():
         lang = stock.get("lang", "en")
         limit = stock.get("limit", 2)
 
-        print(f"   -> {name} ({ticker}) 뉴스 수집 중...")
+        print(f"   -> Collecting news for {name} ({ticker})...")
         
-        # 1. 뉴스 수집
+        # 1. Collect news
         raw_news = get_google_news_rss(name, lang, limit)
         
-        # 2. AI 분석
+        # 2. AI Analysis
         if raw_news:
             analyzed_news = analyze_news_sentiment(name, raw_news)
-            # [수정] 결과를 평탄화(Flatten)하여 추가
             for item in analyzed_news:
-                item["ticker"] = ticker # 티커 정보를 각 뉴스 항목에 직접 주입
+                item["ticker"] = ticker 
                 results.append(item)
     
     return results
