@@ -1,3 +1,5 @@
+# backend/services/sentiment_analysis.py
+
 import feedparser
 import requests
 import os
@@ -12,36 +14,36 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # =========================================================
-# ▼▼▼ [설정] 종목 리스트 ▼▼▼
+# ▼▼▼ [Configuration] Target Stocks List ▼▼▼
 # =========================================================
-# 이제 'avg_velocity'는 초기값일 뿐, 데이터가 쌓이면 무시됩니다.
+# Note: 'avg_velocity' is just an initial value. Once data accumulates, it is dynamically calculated.
 TARGET_STOCKS = [
     {
         "ticker": "SNDK",         
         "name": "SanDisk Corp",
         "fetch_limit": 100,
-        "avg_velocity": 10, # 초기값 (데이터 없을 때 사용)
+        "avg_velocity": 10, # Initial value (used when no historical data exists)
         "use_naver": False 
     },
     {
         "ticker": "TSLA",         
         "name": "Tesla",
         "fetch_limit": 100,
-        "avg_velocity": 10, # 초기값 (데이터 없을 때 사용)
+        "avg_velocity": 10, # Initial value
         "use_naver": False 
     },
     #{
     #   "ticker": "005930",       
-    #    "name": "삼성전자",
+    #    "name": "Samsung Electronics",
     #    "fetch_limit": 50,
-    #    "avg_velocity": 20, # 초기값
+    #    "avg_velocity": 20,
     #    "use_naver": True 
     #}
 ]
 
 MODEL_FAST = "solar-1-mini-chat"
 MODEL_SMART = "solar-pro2"
-HISTORY_FILE = "velocity_history.json"  # 속도 기록 저장 파일
+HISTORY_FILE = "velocity_history.json"  # File to store velocity history
 
 SPAM_KEYWORDS = ["whatsapp", "telegram", "giveaway", "free", "discord", "리딩", "무료", "카톡", "밴드", "가입", "고수익", "입장"]
 
@@ -74,10 +76,10 @@ def parse_json_safely(text):
         return None
 
 # ---------------------------------------------------------
-# [신규 기능] 파일 기반 속도 데이터 관리
+# [New Feature] File-based Velocity Data Management
 # ---------------------------------------------------------
 def load_velocity_history():
-    """기록된 속도 데이터를 불러옵니다."""
+    """Loads recorded velocity data."""
     if not os.path.exists(HISTORY_FILE):
         return {}
     try:
@@ -87,7 +89,7 @@ def load_velocity_history():
         return {}
 
 def save_velocity_history(history):
-    """속도 데이터를 파일에 저장합니다."""
+    """Saves velocity data to a file."""
     try:
         with open(HISTORY_FILE, "w", encoding="utf-8") as f:
             json.dump(history, f, indent=2, ensure_ascii=False)
@@ -96,28 +98,27 @@ def save_velocity_history(history):
 
 def get_dynamic_avg_velocity(ticker, default_val):
     """
-    [핵심] 저장된 기록을 바탕으로 '동적 평균 속도'를 계산합니다.
-    최근 10번의 기록 평균을 사용합니다.
+    [Core] Calculates the 'dynamic average velocity' based on recorded history.
+    Uses the average of the last 10 records.
     """
     history = load_velocity_history()
     records = history.get(ticker, [])
     
     if not records:
-        return default_val # 기록 없으면 설정값 사용
+        return default_val # Use default value if no records exist
     
-    # [변경] 딕셔너리 리스트에서 'velocity' 값만 추출
-    # 예: [{'date': '...', 'velocity': 10}, ...] -> [10, 15, ...]
+    # Extract only the 'velocity' values from a list of dictionaries
     velocities = []
     for r in records:
         if isinstance(r, dict) and 'velocity' in r:
             velocities.append(r['velocity'])
-        elif isinstance(r, (int, float)): # 호환성: 옛날 숫자 데이터가 있다면 포함
+        elif isinstance(r, (int, float)): # Compatibility for old numeric data
             velocities.append(r)
             
     if not velocities:
         return default_val
 
-    # 최근 14일(2주) 치 평균 사용
+    # Use average of recent 14 days
     recent_velocities = velocities[-14:]
     avg = sum(recent_velocities) / len(recent_velocities)
     
@@ -125,8 +126,8 @@ def get_dynamic_avg_velocity(ticker, default_val):
 
 def update_velocity_history(ticker, current_velocity):
     """
-    오늘 날짜의 기록이 이미 있으면 '갱신(덮어쓰기)'하고,
-    없으면 '추가(Append)'합니다.
+    Updates today's record (overwrite) if it exists,
+    otherwise adds (append) a new record.
     """
     if current_velocity <= 0: return
 
@@ -137,32 +138,31 @@ def update_velocity_history(ticker, current_velocity):
     today_str = datetime.now().strftime("%Y-%m-%d")
     records = history[ticker]
     
-    # [핵심 로직] 마지막 기록이 오늘인지 확인
+    # Check if the last record is today's
     is_today_exist = False
     
     if records:
         last_record = records[-1]
-        # 기록이 딕셔너리 형태이고, 날짜가 오늘이면
         if isinstance(last_record, dict) and last_record.get('date') == today_str:
-            # 오늘의 기록을 최신 값으로 업데이트 (덮어쓰기)
+            # Overwrite today's record with the latest value
             last_record['velocity'] = current_velocity
             is_today_exist = True
             
-    # 오늘 기록이 없으면 새로 추가
+    # Add new if today's record doesn't exist
     if not is_today_exist:
         records.append({
             "date": today_str,
             "velocity": current_velocity
         })
     
-    # 최근 60일 데이터만 유지
+    # Maintain only the last 60 days of data
     if len(records) > 60:
         history[ticker] = records[-60:]
         
     save_velocity_history(history)
 
 def check_volume_spike(ticker, posts, default_velocity):
-    if len(posts) < 5: return "데이터 부족", 0
+    if len(posts) < 5: return "Not Enough Data", 0
     try:
         newest_date = posts[0]['dt']
         oldest_date = posts[-1]['dt']
@@ -170,15 +170,13 @@ def check_volume_spike(ticker, posts, default_velocity):
         diff_hours = diff_seconds / 3600
         if diff_hours <= 0: diff_hours = 0.01
         
-        # 1. 현재 속도 계산
+        # 1. Calculate current velocity
         current_velocity = len(posts) / diff_hours
         
-        # 2. [변경] 동적 평균 속도 가져오기 (DB 대용)
-        # 기록된 평균을 우선 사용하고, 없으면 default_velocity 사용
+        # 2. Get dynamic average velocity (DB replacement)
         avg_velocity = get_dynamic_avg_velocity(ticker, default_velocity)
         
-        # 3. 이번 측정값을 기록에 저장 (다음번 평균을 위해)
-        # 단, '데이터 부족'이거나 이상치일 때는 저장 안 할 수도 있음
+        # 3. Save this measurement to history
         update_velocity_history(ticker, current_velocity)
 
         ratio = current_velocity / avg_velocity if avg_velocity > 0 else 1.0
@@ -187,8 +185,8 @@ def check_volume_spike(ticker, posts, default_velocity):
         if ratio > 2.5: status = "🔥 Volume Spike"
         elif ratio > 1.5: status = "⚠️ Active"
         
-        # 디버깅용 로그
-        print(f"   -> ⏱️ 속도: {current_velocity:.1f} (평균: {avg_velocity:.1f}) | 비율: {ratio:.1f}배")
+        # Debugging log
+        print(f"   -> ⏱️ Velocity: {current_velocity:.1f} (Avg: {avg_velocity:.1f}) | Ratio: {ratio:.1f}x")
         
         return status, round(current_velocity, 1)
     except Exception as e:
@@ -196,22 +194,20 @@ def check_volume_spike(ticker, posts, default_velocity):
         return "Calc Error", 0
 
 import time
-import random # 상단에 추가
-import requests # 상단에 requests가 import 되어 있어야 합니다.
+import random 
 
-# [핵심] 함수 바깥(또는 파일 상단)에 Session 객체를 하나 만들어 둡니다.
-# 이렇게 하면 프로그램이 실행되는 동안 쿠키와 연결 상태가 유지됩니다.
+# Create a Session object to maintain cookies and connection state
 reddit_session = requests.Session()
 
 def get_reddit_posts(ticker, limit):
     rss_url = f"https://www.reddit.com/r/stocks+wallstreetbets+investing+technology/search.rss?q={ticker}&sort=new&restrict_sr=on&limit=100"
     
     posts = []
-    print(f"🔍 [Reddit] {ticker} 수집 시도 (Max 100)...")
+    print(f"🔍 [Reddit] Attempting to collect {ticker} (Max 100)...")
     
     max_retries = 3
     for attempt in range(max_retries):
-        # 헤더를 조금 더 사람(브라우저)처럼 보이게 보강합니다.
+        # Enhance headers to appear more like a human (browser)
         headers = {
             'User-Agent': f'MyFinBot_v1.{random.randint(100, 999)} (Contact: myemail@gmail.com)',
             'Accept': 'application/rss+xml, application/xml, text/xml; q=0.9, */*; q=0.8',
@@ -219,7 +215,6 @@ def get_reddit_posts(ticker, limit):
         }
         
         try:
-            # [변경] requests.get 대신 reddit_session.get 을 사용합니다!
             resp = reddit_session.get(rss_url, headers=headers, timeout=10)
             
             if resp.status_code == 200:
@@ -227,7 +222,6 @@ def get_reddit_posts(ticker, limit):
                 if not feed.entries:
                     return []
 
-                # (이전과 동일한 파싱 로직)
                 for entry in feed.entries:
                     if len(posts) >= limit: break
                     content = clean_text(entry.description) if 'description' in entry else ""
@@ -245,27 +239,27 @@ def get_reddit_posts(ticker, limit):
                 return posts
 
             elif resp.status_code == 429:
-                wait_time = (attempt + 1) * 5  # 대기 시간을 조금 더 늘립니다 (5초, 10초, 15초)
-                print(f"   ⚠️ [Reddit] 429 차단! {wait_time}초 대기 후 재시도... ({attempt+1}/{max_retries})")
+                wait_time = (attempt + 1) * 5  
+                print(f"   ⚠️ [Reddit] 429 Blocked! Retrying in {wait_time}s... ({attempt+1}/{max_retries})")
                 time.sleep(wait_time)
                 continue
             
             else:
-                print(f"   ⚠️ [Reddit] {ticker} 요청 실패! 상태 코드: {resp.status_code}")
+                print(f"   ⚠️ [Reddit] Request failed for {ticker}! Status Code: {resp.status_code}")
                 return []
                 
         except Exception as e:
-            print(f"   ⚠️ [Reddit] 통신 에러: {e}")
+            print(f"   ⚠️ [Reddit] Network Error: {e}")
             time.sleep(2)
             
-    print(f"   ❌ [Reddit] {ticker} 최대 재시도 초과로 포기.")
+    print(f"   ❌ [Reddit] Gave up on {ticker} after max retries.")
     return []
 
 def get_naver_posts(code, limit):
     posts = []
     if not code.isdigit(): return []
 
-    print(f"🔍 [Naver HTML] {code} PC 종토방 수집 시도...")
+    print(f"🔍 [Naver HTML] Attempting to collect PC discussion board for {code}...")
     headers = {'User-Agent': 'Mozilla/5.0'}
     page = 1
     
@@ -315,18 +309,24 @@ def summarize_with_llm(ticker, posts):
     if len(full_content) > 3000:
         full_content = full_content[:3000] + "...(truncated)"
 
-    # [수정] 프롬프트 엄격화: 전체 번역 금지, 1줄 요약 강제
+    # [Dynamic Language Setup] 프롬프트에 동적 언어 할당 및 예시 문장 동적 생성
+    lang_code = os.getenv("REPORT_LANGUAGE", "en").lower()
+    target_lang = "Korean" if lang_code == "ko" else "English"
+    
+    example_1 = "테슬라 자율주행 기술에 대한 혼란이 가중되고 있습니다." if lang_code == "ko" else "Confusion over Tesla's autonomous driving technology is growing."
+    example_2 = "단기 옵션 매도 시점에 대한 투자자들의 후회가 많습니다." if lang_code == "ko" else "Many investors regret the timing of selling short-term options."
+
     system_prompt = f"""
     Analyze the comments about {ticker}.
     Select exactly 10 most meaningful points.
     
     CRITICAL RULES:
-    1. SUMMARIZE each point into just ONE short Korean sentence (under 40 characters).
+    1. SUMMARIZE each point into just ONE short {target_lang} sentence (under 80 characters).
     2. Output format MUST be a pure, valid JSON array of strings.
     3. You MUST separate each string with a comma (,). Do NOT cut off the text.
     
     Example format:
-    ["테슬라 자율주행 기술에 대한 혼란이 가중되고 있습니다.", "단기 옵션 매도 시점에 대한 투자자들의 후회가 많습니다."]
+    ["{example_1}", "{example_2}"]
     """
     try:
         response = client.chat.completions.create(
@@ -334,15 +334,14 @@ def summarize_with_llm(ticker, posts):
             messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": full_content}],
             temperature=0.1, 
             timeout=30,
-            max_tokens=1500 # [핵심] 텍스트가 도중에 잘리지 않도록 여유 토큰 부여
+            max_tokens=1500 
         )
         
         raw_content = response.choices[0].message.content
         parsed_data = parse_json_safely(raw_content)
         
-        # 디버깅: 실패 시 원본을 보여줌
         if not parsed_data:
-            print(f"   ⚠️ [Debug] {ticker} 파싱 실패. LLM 원본 응답:\n{raw_content[:200]}...")
+            print(f"   ⚠️ [Debug] Parse failed for {ticker}. LLM raw response:\n{raw_content[:200]}...")
             return []
             
         return parsed_data
@@ -354,10 +353,17 @@ def analyze_final_sentiment(ticker, key_sentences):
     api_key = os.getenv("UPSTAGE_API_KEY")
     client = OpenAI(api_key=api_key, base_url="https://api.upstage.ai/v1/solar")
 
+    # [Dynamic Language Setup]
+    lang_code = os.getenv("REPORT_LANGUAGE", "en").lower()
+    target_lang = "Korean" if lang_code == "ko" else "English"
+
     sentences_text = "\n".join([f"{i+1}. {s}" for i, s in enumerate(key_sentences)])
+    
+    # Note: JSON 키 이름인 "reason_korean"은 나중에 HTML 템플릿(UI) 변경 시 깨지지 않도록 일단 유지했습니다. 
+    # 값(Value) 자체는 target_lang(영어)으로 잘 번역되어 출력됩니다.
     system_prompt = f"""
     Analyze investor sentiment for {ticker}.
-    Output JSON: {{ "score": <0-100>, "status": "<Extreme Fear/Fear/Neutral/Greed/Extreme Greed>", "reason_korean": "..." }}
+    Output JSON: {{ "score": <0-100>, "status": "<Extreme Fear/Fear/Neutral/Greed/Extreme Greed>", "reason_korean": "<Write the reason in {target_lang}>" }}
     """
     try:
         response = client.chat.completions.create(
@@ -371,7 +377,7 @@ def analyze_final_sentiment(ticker, key_sentences):
 
 def get_sentiment_analysis():
     results = []
-    print("🚀 커뮤니티 감성 분석 시작...")
+    print("🚀 Starting Community Sentiment Analysis...")
     
     for stock in TARGET_STOCKS:
         try:
@@ -384,18 +390,17 @@ def get_sentiment_analysis():
                 raw_posts = get_reddit_posts(ticker, limit)
                 
             if not raw_posts: 
-                print(f"⚠️ [{stock['name']}] 데이터 없음 (0건).")
+                print(f"⚠️ [{stock['name']}] No data found (0 records).")
                 continue
             
-            # [수정] check_volume_spike에 ticker를 전달하여 히스토리 관리
             vol_status, velocity = check_volume_spike(stock["name"], raw_posts, stock["avg_velocity"])
             filtered_count = len(raw_posts)
             
-            print(f"🤖 [{stock['name']}] 요약 중 ({filtered_count}건)...")
+            print(f"🤖 [{stock['name']}] Summarizing ({filtered_count} records)...")
             key_sentences = summarize_with_llm(stock["name"], raw_posts)
             if not key_sentences: continue
             
-            print(f"🧠 [{stock['name']}] 심층 분석 중...")
+            print(f"🧠 [{stock['name']}] Performing deep analysis...")
             final_data = analyze_final_sentiment(stock["name"], key_sentences)
             
             if final_data:
@@ -405,10 +410,10 @@ def get_sentiment_analysis():
                 final_data["filtered_count"] = filtered_count
                 final_data["summary_sentences"] = key_sentences
                 results.append(final_data)
-                print(f"   -> ✅ 완료: {stock['name']}")
+                print(f"   -> ✅ Complete: {stock['name']}")
                 
         except Exception as e:
-            print(f"❌ [{stock.get('name')}] 오류: {e}")
+            print(f"❌ [{stock.get('name')}] Error: {e}")
             continue
 
         time.sleep(2)

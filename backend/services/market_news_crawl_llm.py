@@ -1,4 +1,4 @@
-# backend/services/market_new_crawl.py
+# backend/services/market_news_crawl_llm.py
 
 import feedparser
 import os
@@ -12,42 +12,42 @@ import pytz
 
 load_dotenv()
 
-# --- [전략 수정] Positive Filter 위주의 정밀 쿼리 ---
-# 2. Positive Filter 강화: 지수명 + 마감키워드(Close/Ends) 필수 포함(AND)
-# 3. 시간 단축: when:12h (최근 12시간)으로 설정하여 '어제 아침' 뉴스 배제
+# --- [Strategy Update] Precision Queries based on Positive Filter ---
+# 1. Enhanced Positive Filter: Must include Index name + closing keywords (Close/Ends) via AND
+# 2. Reduced Timeframe: Set to when:12h (last 12 hours) to exclude 'yesterday morning' news
 
 TRACKS = [
     {
-        # [Track A] 장 마감 시황 (Market Wrap)
-        # S&P 500 또는 Nasdaq이 제목에 꼭 있어야 하고, 'Close'나 'Wrap' 같은 마감 단어가 필수
-        "name": "Track A: Market Wrap (현상)",
+        # [Track A] Market Wrap 
+        # S&P 500 or Nasdaq must be in the title, along with a closing keyword like 'Close' or 'Wrap'
+        "name": "Track A: Market Wrap",
         "url": 'https://news.google.com/rss/search?q=("S%26P+500"+OR+"Nasdaq")+AND+("close"+OR+"ends"+OR+"settles"+OR+"wrap")+when:12h&hl=en-US&gl=US&ceid=US:en',
         "limit": 2
     },
     {
-        # [Track B] 등락 원인 (Why it moved)
-        # "Stocks"나 "Wall Street"가 주어이고, 인과관계(due to, as)를 설명하는 기사
-        "name": "Track B: Why it moved (원인)",
+        # [Track B] Why it moved
+        # Subject is "Stocks" or "Wall Street", explaining causality (due to, as)
+        "name": "Track B: Why it moved",
         "url": 'https://news.google.com/rss/search?q=("US+stocks"+OR+"Wall+Street")+AND+("rise"+OR+"fall"+OR+"climb"+OR+"drop")+AND+("due+to"+OR+"as"+OR+"on")+when:12h&hl=en-US&gl=US&ceid=US:en',
         "limit": 4
     },
     {
-        # [Track C] 주도주 (Movers)
-        # 'Active stocks' 등으로 검색하되, Track A/B에서 다룬 내용과 겹치지 않게 개별 종목 위주
-        "name": "Track C: Active Movers (주도주)",
+        # [Track C] Active Movers
+        # Search via 'Active stocks', focusing on individual stocks to avoid overlap with Track A/B
+        "name": "Track C: Active Movers",
         "url": 'https://news.google.com/rss/search?q=("S%26P+500"+OR+"Nasdaq")+AND+("biggest+movers"+OR+"active+stocks")+when:12h&hl=en-US&gl=US&ceid=US:en',
         "limit": 2
     }
 ]
 
 def clean_html(raw_html):
-    """HTML 태그 제거"""
+    """Remove HTML tags"""
     cleanr = re.compile('<.*?>')
     cleantext = re.sub(cleanr, '', raw_html)
     return unescape(cleantext).strip()
 
 def convert_pubdate_to_kst(pub_date_str):
-    """RSS 날짜(GMT) -> KST 변환"""
+    """Convert RSS date (GMT) -> KST"""
     try:
         dt_obj = datetime.strptime(pub_date_str, "%a, %d %b %Y %H:%M:%S %Z")
         dt_utc = dt_obj.replace(tzinfo=pytz.utc)
@@ -58,12 +58,12 @@ def convert_pubdate_to_kst(pub_date_str):
 
 def get_market_news():
     """
-    3-Track 전략 수집 (Positive Filter 적용)
+    3-Track Strategy Collection (Positive Filter Applied)
     """
     all_articles = []
     seen_links = set()
 
-    print("🚀 3-Track 미국 증시 뉴스 크롤링 (Positive Filter)...")
+    print("🚀 Crawling US Stock Market News via 3-Track Strategy...")
 
     try:
         for track in TRACKS:
@@ -74,16 +74,16 @@ def get_market_news():
                 if count >= track["limit"]:
                     break
                 
-                # 중복 URL 체크
+                # Check for duplicate URLs
                 if entry.link in seen_links:
                     continue
                 seen_links.add(entry.link)
                 
-                # 날짜 변환
+                # Date conversion
                 pub_date = entry.published if 'published' in entry else ""
                 kst_date = convert_pubdate_to_kst(pub_date)
 
-                # Description 전처리
+                # Description preprocessing
                 raw_desc = entry.description if 'description' in entry else ""
                 clean_desc = clean_html(raw_desc)
                 summary_text = clean_desc if len(clean_desc) > 20 else entry.title
@@ -97,17 +97,17 @@ def get_market_news():
                 })
                 count += 1
             
-            print(f"✅ {track['name']} - {count}개 수집 완료")
+            print(f"✅ {track['name']} - {count} articles collected")
 
         if not all_articles:
             return {"status": "error", "message": "No news found"}
 
-        # AI 분석 요청
+        # Request AI Analysis
         ai_result = analyze_with_upstage_summary(all_articles)
         
         return {
             "status": "success",
-            "market_summary": ai_result.get("market_summary", "요약 생성 실패"),
+            "market_summary": ai_result.get("market_summary", "Summary generation failed"),
             "news_list": ai_result.get("news_list", all_articles)
         }
 
@@ -117,12 +117,16 @@ def get_market_news():
 
 def analyze_with_upstage_summary(articles):
     """
-    Upstage Solar API: 종합 요약 + 번역
+    Upstage Solar API: Comprehensive Summary + Translation (Dynamic Language)
     """
     api_key = os.getenv("UPSTAGE_API_KEY")
     if not api_key:
         print("⚠️ Upstage API Key missing")
-        return {"market_summary": "API Key 없음", "news_list": articles}
+        return {"market_summary": "API Key Missing", "news_list": articles}
+
+    # [Dynamic Language Setup] Read REPORT_LANGUAGE from .env
+    lang_code = os.getenv("REPORT_LANGUAGE", "en").lower()
+    target_lang = "Korean" if lang_code == "ko" else "English"
 
     client = OpenAI(
         api_key=api_key,
@@ -133,26 +137,26 @@ def analyze_with_upstage_summary(articles):
     for i, a in enumerate(articles):
         context_text += f"[News {i+1}] ({a['track']}) - {a['pub_date']}\nTitle: {a['title']}\nContent: {a['summary_raw'][:300]}\n\n"
 
-    # [프롬프트] 'Market Close' 시점을 명시적으로 강조
-    system_prompt = """
+    # [Prompt] Explicitly emphasize 'Market Close' and apply dynamic language
+    system_prompt = f"""
     You are an expert AI Financial Analyst specializing in the US Stock Market. 
-    Your goal is to write a 'Daily Market Briefing' for Korean investors.
+    Your goal is to write a 'Daily Market Briefing' for investors.
 
     Task 1: Market Driver Synthesis
     - Focus on the 'Market Close' results from the provided news.
     - Identify the primary reason for the market's movement (e.g., S&P 500 rose due to tech earnings).
-    - Write a cohesive paragraph (3-4 sentences) **in Korean**.
+    - Write a cohesive paragraph (3-4 sentences) **in {target_lang}**.
 
-    Task 2: Headline Translation
-    - Translate the titles into professional Korean business language.
+    Task 2: Headline Translation/Formatting
+    - Translate or refine the titles into professional {target_lang} business language.
 
     Output MUST be in JSON format:
-    {
-        "market_summary": "한국어 요약...",
+    {{
+        "market_summary": "{target_lang} summary goes here...",
         "news_list": [
-            {"korean_title": "...", "original_title": "..."}
+            {{"target_title": "...", "original_title": "..."}}
         ]
-    }
+    }}
     """
 
     try:
@@ -173,12 +177,12 @@ def analyze_with_upstage_summary(articles):
         ai_list = ai_data.get("news_list", [])
         
         for i, article in enumerate(articles):
-            korean_title = article["title"]
+            processed_title = article["title"]
             if i < len(ai_list):
-                korean_title = ai_list[i].get("korean_title", article["title"])
+                processed_title = ai_list[i].get("target_title", article["title"])
             
             final_news_list.append({
-                "title": korean_title,
+                "title": processed_title,
                 "original_title": article["title"],
                 "link": article["link"],
                 "track": article["track"],
@@ -192,4 +196,4 @@ def analyze_with_upstage_summary(articles):
 
     except Exception as e:
         print(f"Upstage AI Logic Error: {e}")
-        return {"market_summary": "AI 분석 중 오류 발생", "news_list": articles}
+        return {"market_summary": "Error occurred during AI analysis", "news_list": articles}
