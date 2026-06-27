@@ -10,7 +10,7 @@ import io
 import numpy as np
 
 # ---------------------------------------------------------
-# [설정] DB 경로 및 휴장일
+# [Configuration] Database Path and Market Holidays
 # ---------------------------------------------------------
 DB_PATH = "whale_tracker.db"
 if __name__ == "__main__":
@@ -26,6 +26,7 @@ def log(msg):
     print(msg, flush=True)
     
 def get_target_report_date():
+    """Finds the most recent valid trading day, skipping weekends and holidays."""
     target_date = datetime.now() - timedelta(days=1)
     while True:
         date_str = target_date.strftime('%Y-%m-%d')
@@ -36,10 +37,12 @@ def get_target_report_date():
         return date_str
 
 def get_frequency(ticker):
+    """Queries the database to count whale events in the last 7 and 30 days."""
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        # 오늘 포함 최근 7일, 30일 데이터 조회
+        
+        # Query data for the last 7 and 30 days (including today)
         date_7 = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
         date_30 = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
         
@@ -53,6 +56,7 @@ def get_frequency(ticker):
         return 0, 0
 
 def save_whale_event(data):
+    """Saves a detected whale event (Z-score >= 2.0) into the SQLite database."""
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
@@ -79,9 +83,10 @@ def save_whale_event(data):
         conn.commit()
         conn.close()
     except Exception as e:
-        log(f"   ⚠️ DB 저장 에러: {e}")
+        log(f"   ⚠️ DB Save Error: {e}")
 
 def calculate_metrics(ticker, today_vol):
+    """Calculates the volume Z-score using historical data from yfinance."""
     try:
         stock = yf.Ticker(ticker)
         hist = stock.history(period="1y")
@@ -98,8 +103,9 @@ def calculate_metrics(ticker, today_vol):
     except:
         return 0.0
     
-# [추가] 기업 규모 분류 함수 (get_whale_tracker_data 함수 바로 위에 위치)
+# [Added] Market Cap Categorization Function
 def categorize_market_cap(mc_str):
+    """Categorizes market capitalization string into predefined size brackets."""
     if pd.isna(mc_str) or mc_str == '-': return "-"
     try:
         val = float(mc_str.replace('B','').replace('M','').replace('K',''))
@@ -117,10 +123,11 @@ def categorize_market_cap(mc_str):
         return "-"
 
 def get_whale_tracker_data():
-    log("🐋 [Whale Tracker] 데이터 수집 및 Z-score 분류 시작...")
+    """Main execution function for collecting data and classifying Z-scores."""
+    log("🐋 [Whale Tracker] Starting data collection and Z-score classification...")
     
     report_date = get_target_report_date()
-    log(f"   📅 분석 기준일: {report_date}")
+    log(f"   📅 Target Analysis Date: {report_date}")
 
     headers = {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -138,7 +145,7 @@ def get_whale_tracker_data():
     ]
 
     for target_name, filter_code in TARGETS:
-        log(f"\n   🔍 [{target_name}] 그룹 스캔 중...")
+        log(f"\n   🔍 Scanning [{target_name}] group...")
         max_scan = 61 if "All" in target_name else 41
         
         for start_row in range(1, max_scan, 20):
@@ -156,12 +163,12 @@ def get_whale_tracker_data():
                         if ticker in seen_tickers: continue
                         seen_tickers.add(ticker)
 
-                        # [로직 수정] 대분류 섹터와 세부 산업을 모두 가져와 ETF 여부 판별
+                        # [Logic Update] Retrieve both Sector and Industry to determine if it's an ETF
                         raw_sector = str(row.get('Sector', 'Unknown'))
                         raw_industry = str(row.get('Industry', 'Unknown'))
                         market_cap_str = str(row.get('Market Cap', '-'))
 
-                        # 중분류(Industry)가 ETF면 섹터명을 'ETF'로 고정, 아니면 대분류(Sector) 사용
+                        # If Industry indicates an ETF, set display_sector to 'ETF', otherwise use Sector
                         if "Exchange Traded Fund" in raw_industry:
                             display_sector = "ETF"
                         else:
@@ -171,13 +178,14 @@ def get_whale_tracker_data():
 
                         price = float(str(row.get('Price', 0)))
                         vol_str = str(row.get('Volume', '0'))
-                        # Volume 계산 로직
+                        
+                        # Volume calculation logic
                         if 'M' in vol_str: volume = int(float(vol_str.replace('M','')) * 1_000_000)
                         elif 'B' in vol_str: volume = int(float(vol_str.replace('B','')) * 1_000_000_000)
                         elif 'K' in vol_str: volume = int(float(vol_str.replace('K','')) * 1_000)
                         else: volume = int(vol_str)
 
-                        # Z-score 계산
+                        # Calculate Z-score
                         z_score = calculate_metrics(ticker, volume)
                         
                         weekly_freq, monthly_freq = 0, 0
@@ -186,12 +194,12 @@ def get_whale_tracker_data():
                                     'volume': volume, 'z_score': z_score}
                             save_whale_event(data)
                             weekly_freq, monthly_freq = get_frequency(ticker)
-                            log(f"      🚨 [고래포착] {ticker} (Z:{z_score})")
+                            log(f"      🚨 [Whale Detected] {ticker} (Z:{z_score})")
 
-                        # item_data에 반영
+                        # Append to item_data
                         item_data = {
                             "ticker": ticker,
-                            "sector": display_sector, # ETF일 경우 'ETF'로 표기됨
+                            "sector": display_sector, # Marked as 'ETF' if applicable
                             "size": company_size,
                             "z_score": z_score,
                             "weekly_freq": weekly_freq,
@@ -204,20 +212,25 @@ def get_whale_tracker_data():
                             normal_alerts.append(item_data)
 
                     except: continue
+                # Anti-Bot Strategy: Short delay between pagination requests
                 time.sleep(random.uniform(1, 2))
             except Exception as e:
-                log(f"   ⚠️ 에러 ({target_name}): {e}")
+                log(f"   ⚠️ Error ({target_name}): {e}")
                 break
     
-    # Z-score 기준 내림차순 정렬
+    # Sort in descending order based on Z-score
     whale_alerts.sort(key=lambda x: x['z_score'], reverse=True)
     normal_alerts.sort(key=lambda x: x['z_score'], reverse=True)
     
-    log(f"\n✅ 분석 완료. 고래: {len(whale_alerts)}개, 활동성: {len(normal_alerts)}개 리포팅.")
+    stocks = [item for item in whale_alerts if item['sector'] != 'ETF']
+    etfs = [item for item in whale_alerts if item['sector'] == 'ETF']
+    
+    log(f"\n✅ Analysis complete. Reporting Whales: {len(whale_alerts)} (Stocks: {len(stocks)}, ETFs: {len(etfs)}, Active alerts: {len(normal_alerts)}).")
     
     return {
-        "whale_alerts": whale_alerts,
-        "normal_alerts": normal_alerts
+        "stocks": stocks,
+        "etfs": etfs,
+        "normal_alerts": normal_alerts    
     }
 
 if __name__ == "__main__":

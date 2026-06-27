@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Response
-from fastapi.responses import HTMLResponse # 상단에 추가
+from fastapi.responses import HTMLResponse # Added for HTML responses
 from services.briefing_market_index import get_market_summary_markdown, get_sp500_map_image 
 from services.economy_indicators import get_economy_indicators
 from services.market_news_crawl_llm import get_market_news
@@ -11,22 +11,22 @@ from services.insider_tracker import get_insider_trades
 
 
 router = APIRouter(
-    prefix="/report",  # 이 라우터의 모든 주소 앞에 /report가 붙음
+    prefix="/report",  # All routes in this router will be prefixed with /report
     tags=["Report"]
 )
 
-# 1-1. 각종 지표 데일리 시황 마크다운 생성 엔드포인트
+# 1-1. Endpoint to generate daily market indicators markdown
 @router.post("/market-indicators")
 def generate_market_indicators():
     markdown_table = get_market_summary_markdown()
     
-    # n8n이 바로 쓸 수 있는 JSON 구조로 리턴
+    # Return as a JSON structure ready for n8n or frontend consumption
     return {
         "status": "success",
         "market_summary_markdown": markdown_table
     }
 
-# 1-2. S&P 500 Map 이미지(Base64) 생성 엔드포인트
+# 1-2. Endpoint to generate S&P 500 Map image (Base64)
 @router.post("/sp500-map")
 def fetch_sp500_map():
     img_base64 = get_sp500_map_image()
@@ -40,14 +40,14 @@ def fetch_sp500_map():
     else:
         return {
             "status": "error", 
-            "message": "이미지 캡처 실패"
+            "message": "Failed to capture image"
         }
     
-# 1-3. FRED & Forex Factory 경제 지표 크롤링 엔드포인트
+# 1-3. Endpoint to fetch FRED & Forex Factory economic indicators
 @router.post("/economy-indicators")
 def fetch_economy_indicators():
     """
-    1-3. FRED & Forex Factory 경제 지표 크롤링
+    1-3. Crawls economic indicators from FRED and Forex Factory.
     """
     data = get_economy_indicators()
     return {
@@ -55,11 +55,11 @@ def fetch_economy_indicators():
         "data": data 
     }
 
-# 1-4. 전날 시장에 영향을 끼친 주요 뉴스들 요약 정리 (Upstage AI)
+# 1-4. Endpoint to summarize major market-moving news (Upstage AI)
 @router.post("/market-news")
 def fetch_market_news():
     """
-    1-4. 지난 24시간 주요 미국 증시 뉴스 5선 (Upstage AI 요약)
+    1-4. Summarizes top 5 US stock market news from the past 24 hours using Upstage AI.
     """
     news_data = get_market_news()
     return {
@@ -67,11 +67,11 @@ def fetch_market_news():
         "data": news_data
     }
 
-# 2-1. 관심 종목 커뮤니티 감성 분석 (공포/탐욕 지수) 엔드포인트
+# 2-1. Endpoint for target stocks community sentiment analysis
 @router.post("/sentiment-analysis")
 def fetch_sentiment_analysis():
     """
-    2-1. 관심 종목 커뮤니티 감성 분석 (공포/탐욕 지수)
+    2-1. Analyzes community sentiment (Fear/Greed Index) for target stocks.
     """
     data = get_sentiment_analysis()
     return {
@@ -79,11 +79,11 @@ def fetch_sentiment_analysis():
         "data": data
     }
 
-# 2-2. 관심 종목 뉴스 수집 엔드포인트
+# 2-2. Endpoint for target stock news collection
 @router.post("/stock-news")
 def fetch_stock_news():
     """
-    2-2. 관심 종목(Target Stocks) 관련 최신 뉴스 수집
+    2-2. Collects the latest news articles for Target Stocks.
     """
     news_data = get_interested_stock_news()
     return {
@@ -91,46 +91,53 @@ def fetch_stock_news():
         "data": news_data
     }
 
-# 3-1. 고래 출몰 빈도 분석 엔드포인트
+# 3-1. Endpoint for whale appearance frequency analysis
 @router.post("/whale-frequency")
 def report_whale_frequency():
     """
-    3-1. 대규모 거래 체결 빈도수 파악
+    3-1. Identifies high-volume trade frequencies.
     [Whale Tracker]
-    1. Finviz에서 RelVol > 1.5 종목 스캔
-    2. Z-score > 2.0 검증
-    3. DB 저장 및 빈도 분석 결과 반환
+    1. Scans Finviz for stocks with RelVol > 1.5
+    2. Validates if Z-score >= 2.0
+    3. Saves to DB and returns frequency analysis results
     """
-    data = get_whale_tracker_data() # {stocks:..., etfs:...} 형태
+    data = get_whale_tracker_data() 
     
-    total_count = len(data['stocks']) + len(data['etfs'])
-
+    # [Fixed] Updated keys to match the new dictionary structure from whale_tracker.py
+    total_count = len(data.get('stocks', [])) + len(data.get('etfs', []))
+    
     return {
         "status": "success",
         "count": total_count,
-        "data": data # 프론트엔드에서 data.stocks, data.etfs로 접근
+        "data": data 
     }
 
-# 3-2. 내부자 거래 분석 엔드포인트
+# 3-2. Endpoint for insider trades analysis
 @router.post("/insider-trades")
 def report_insider_trades():
+    """
+    3-2. Analyzes recent significant insider trades and clusters.
+    """
     data = get_insider_trades()
     
-    # 전체 건수 계산
+    # Calculate total count of significant trades
     total_count = len(data['cluster_buys']) + len(data['significant_buys']) + len(data['significant_sells'])
     
     return {
         "status": "success",
         "count": total_count,
-        "data": data # 프론트엔드에서 data.cluster_buys 등으로 접근
+        "data": data 
     }
 
-# 최종. HTML 이메일 본문 반환 엔드포인트
+# Final. Endpoint to return HTML email body
 @router.post("/daily-briefing", response_class=HTMLResponse)
 def get_daily_briefing_html():
+    """
+    Final. Generates and returns the compiled Daily Briefing email in HTML format.
+    """
     try:
         html_content = generate_email_report()
-        # JSON 딕셔너리가 아닌, 순수 HTML 문자열 그대로 반환
+        # Return raw HTML string instead of a JSON dictionary
         return HTMLResponse(content=html_content)
     except Exception as e:
         print(f"❌ Server Error: {e}")
