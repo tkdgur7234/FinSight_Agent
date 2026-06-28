@@ -6,7 +6,6 @@ import io
 import yfinance as yf
 from datetime import datetime, timedelta
 import time
-import random
 from concurrent.futures import ThreadPoolExecutor, as_completed # For parallel processing
 from collections import defaultdict
 
@@ -75,7 +74,39 @@ def check_financial_health_single(ticker):
         return ticker, True, "Pass", industry
     except Exception:
         return ticker, False, "Fetch error", "N/A"
+    
+def time_it(func):
+    def wrapper(*args, **kwargs):
+        # Record the start time
+        start_time = time.time()
+        log(f"⏱️ [{func.__name__}] Starting performance measurement...")
 
+        # Execute the target function
+        result = func(*args, **kwargs)
+
+        # Record the end time and calculate the elapsed time
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+
+        # Display the elapsed time in a readable format
+        if elapsed_time < 60:
+            log(
+                f"⏱️ [{func.__name__}] Execution completed! "
+                f"Total elapsed time: {elapsed_time:.2f} seconds"
+            )
+        else:
+            minutes = int(elapsed_time // 60)
+            seconds = elapsed_time % 60
+            log(
+                f"⏱️ [{func.__name__}] Execution completed! "
+                f"Total elapsed time: {minutes} minutes {seconds:.2f} seconds"
+            )
+
+        return result
+
+    return wrapper
+
+@time_it
 def get_insider_trades():
     cutoff_date = datetime.now() - timedelta(days=LOOKBACK_DAYS)
     log(f"🕵️‍♂️ [Insider Tracker] Starting in-depth analysis (Parallel mode)...")
