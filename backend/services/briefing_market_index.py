@@ -1,74 +1,131 @@
+# backend/services/briefing_market_index.py
+
 import yfinance as yf
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 import os
 import base64
+from dotenv import load_dotenv
 
-# 1. 감시할 티커 목록 (KRW=X 제거함)
-TICKERS = {
-    "다우 존스": "^DJI",
-    "S&P 500": "^GSPC",
-    "나스닥": "^IXIC",
-    "러셀 2000": "^RUT",
-    "WTI 원유": "CL=F",
-    "금": "GC=F",
-    "비트코인": "BTC-USD",
-    "미 국채 10년": "^TNX",
-    "달러 인덱스 / 환율": "DX-Y.NYB"
+load_dotenv()
+
+# ---------------------------------------------------------
+# [i18n] Translation Dictionary for Output Display
+# ---------------------------------------------------------
+TRANSLATIONS = {
+    "en": {
+        "dow": "Dow Jones",
+        "sp500": "S&P 500",
+        "nasdaq": "Nasdaq",
+        "russell": "Russell 2000",
+        "wti": "WTI Crude",
+        "gold": "Gold",
+        "btc": "Bitcoin",
+        "us10y": "US 10Y Bond",
+        "usdkrw": "Dollar Index / Exchange Rate",
+        "header_index": "Index",
+        "header_price": "Price",
+        "header_change": "Change %",
+        "up_emoji": "🟢",  # US standard (Green for Up)
+        "down_emoji": "🔴", # US standard (Red for Down)
+        "krw_suffix": " KRW",
+        "err_ticker": "⚠️ Ticker Error",
+        "err_col": "⚠️ No Column",
+        "err_data": "⚠️ No Data"
+    },
+    "ko": {
+        "dow": "다우 존스",
+        "sp500": "S&P 500",
+        "nasdaq": "나스닥",
+        "russell": "러셀 2000",
+        "wti": "WTI 원유",
+        "gold": "금",
+        "btc": "비트코인",
+        "us10y": "미 국채 10년",
+        "usdkrw": "달러 인덱스 / 환율",
+        "header_index": "지표",
+        "header_price": "현재가",
+        "header_change": "변동률",
+        "up_emoji": "🔴",  # KR standard (Red for Up)
+        "down_emoji": "🔵", # KR standard (Blue for Down)
+        "krw_suffix": "원",
+        "err_ticker": "⚠️ 티커 오류",
+        "err_col": "⚠️ 컬럼 없음",
+        "err_data": "⚠️ 데이터 없음"
+    }
 }
 
-# 네이버 금융에서 원달러 환율 크롤링
+# Define targets securely to map with translations
+TARGET_INDICES = [
+    ("dow", "^DJI"),
+    ("sp500", "^GSPC"),
+    ("nasdaq", "^IXIC"),
+    ("russell", "^RUT"),
+    ("wti", "CL=F"),
+    ("gold", "GC=F"),
+    ("btc", "BTC-USD"),
+    ("us10y", "^TNX"),
+    ("usdkrw", "DX-Y.NYB")
+]
+
 def get_naver_usd_rate():
     """
-    네이버 금융에서 실시간 원달러 환율(매매기준율) 크롤링
+    Crawls the real-time USD/KRW exchange rate from Naver Finance.
     """
     try:
         url = "https://finance.naver.com/marketindex/"
-        # 봇 탐지 방지용 헤더
+        # Anti-bot header
         headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(url, headers=headers)
         
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, "html.parser")
-            # 네이버 금융 환율 섹션의 '미국 USD' 값 추출
+            # Extract 'USD' value from Naver Finance
             usd_item = soup.select_one("#exchangeList > li.on > a.head.usd > div > span.value")
             if usd_item:
-                # 쉼표(,) 제거 후 float 변환
+                # Remove comma and convert to float
                 return float(usd_item.text.replace(",", ""))
     except Exception as e:
-        print(f"Naver Crawl Error: {e}")
+        print(f"   ❌ [Naver Crawl] Error fetching exchange rate: {e}")
     
-    return 0.0 # 실패 시 0.0 반환
+    return 0.0 # Return 0.0 on failure
 
-# 1-1. 마켓 요약 마크다운 생성
 def get_market_summary_markdown():
-    symbols = list(TICKERS.values())
+    """
+    Generates a Markdown table summarizing major market indices.
+    Restored to match the original 3-column layout and calculation logic.
+    """
+    # [Language Setup]
+    lang_code = os.getenv("REPORT_LANGUAGE", "en").lower()
+    t = TRANSLATIONS.get(lang_code, TRANSLATIONS["en"])
     
-    # yfinance 데이터 다운로드
+    symbols = [item[1] for item in TARGET_INDICES]
+    
+    print("📊 [Market Index] Downloading yfinance data...")
+    # Download yfinance data
     df = yf.download(symbols, period="5d", group_by='ticker', threads=True, progress=False, auto_adjust=False)
 
     rows = []
     
-    # [1단계] 네이버에서 환율 가져오기 (Source 변경)
+    # [Step 1] Fetch exchange rate from Naver
     krw_rate = get_naver_usd_rate()
-    # 만약 크롤링 실패하면 0.0원이 뜸
 
-    # [2단계] 표 생성 루프
-    for name, symbol in TICKERS.items():
-        if symbol == "KRW=X":
-            continue
+    # [Step 2] Loop to generate table rows
+    for key_name, symbol in TARGET_INDICES:
+        display_name = t[key_name]
+        
         try:
             if len(symbols) > 1:
                 try:
                     data = df[symbol]
                 except KeyError:
-                    rows.append(f"| {name} | N/A | ⚠️ 티커 오류 |")
+                    rows.append(f"| {display_name} | N/A | {t['err_ticker']} |")
                     continue
             else:
                 data = df
 
-            # 컬럼명 찾기
+            # Find valid column
             cols = [c.lower() for c in data.columns]
             target_col = None
             if 'close' in cols:
@@ -77,14 +134,14 @@ def get_market_summary_markdown():
                 target_col = data.columns[cols.index('adj close')]
             
             if target_col is None:
-                rows.append(f"| {name} | N/A | ⚠️ 컬럼 없음 |")
+                rows.append(f"| {display_name} | N/A | {t['err_col']} |")
                 continue
 
-            # 유효 데이터 필터링
+            # Filter valid series
             valid_series = data[target_col].dropna()
 
             if valid_series.empty:
-                rows.append(f"| {name} | N/A | ⚠️ 데이터 없음 |")
+                rows.append(f"| {display_name} | N/A | {t['err_data']} |")
                 continue
 
             last_close = float(valid_series.iloc[-1])
@@ -97,13 +154,13 @@ def get_market_summary_markdown():
             change_amt = last_close - prev_close
             change_pct = (change_amt / prev_close) * 100 if prev_close != 0 else 0.0
 
-            emoji = "🔴" if change_pct >= 0 else "🔵"
+            # Dynamic Emoji & Sign based on language preference
+            emoji = t["up_emoji"] if change_pct >= 0 else t["down_emoji"]
             sign = "+" if change_pct >= 0 else ""
             
-            # 포맷팅
+            # Custom formatting based on asset type
             if symbol == "DX-Y.NYB":
-                # [수정] 네이버에서 가져온 krw_rate 사용
-                price_str = f"{last_close:.2f} / {krw_rate:,.2f}원"
+                price_str = f"{last_close:.2f} / {krw_rate:,.2f}{t['krw_suffix']}"
             elif symbol == "^TNX":
                 price_str = f"{last_close:.3f}"
             elif symbol == "BTC-USD":
@@ -111,19 +168,29 @@ def get_market_summary_markdown():
             else:
                 price_str = f"{last_close:,.2f}"
 
-            rows.append(f"| {name} | {price_str} | {emoji} {sign}{change_pct:.2f}% |")
+            rows.append(f"| {display_name} | {price_str} | {emoji} {sign}{change_pct:.2f}% |")
 
         except Exception as e:
-            print(f"Error processing {name}: {e}")
-            rows.append(f"| {name} | Error | ⚠️ {str(e)} |")
+            print(f"   ❌ [Market Index] Error processing {display_name}: {e}")
+            rows.append(f"| {display_name} | Error | ⚠️ Error |")
 
-    header = "| 지표 | 현재가 | 변동률 |\n| :--- | :---: | :---: |"
+    # Construct the exact original header format dynamically
+    header = f"| {t['header_index']} | {t['header_price']} | {t['header_change']} |\n| :--- | :---: | :---: |"
+    
+    print("   ✅ [Market Index] Markdown generation complete.")
     return header + "\n" + "\n".join(rows)
 
-# 1-2. S&P 500 Map 이미지(Base64) 생성
+
 def get_sp500_map_image():
+    """
+    Captures the S&P 500 Heatmap via ApiFlash and returns it as a Base64 string.
+    """
     access_key = os.getenv("APIFLASH_ACCESS_KEY")
-    if not access_key: return None
+    if not access_key: 
+        print("   ⚠️ [S&P 500 Map] Missing APIFLASH_ACCESS_KEY in environment variables.")
+        return None
+    
+    print("🌎 [S&P 500 Map] Requesting heatmap image from ApiFlash...")
     
     url = "https://api.apiflash.com/v1/urltoimage"
     params = {
@@ -141,7 +208,8 @@ def get_sp500_map_image():
     try:
         response = requests.get(url, params=params)
         response.raise_for_status()
+        print("   ✅ [S&P 500 Map] Successfully captured and encoded image.")
         return base64.b64encode(response.content).decode("utf-8")
     except Exception as e:
-        print(f"ApiFlash Error: {e}")
+        print(f"   ❌ [S&P 500 Map] ApiFlash Error: {e}")
         return None

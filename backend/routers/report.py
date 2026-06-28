@@ -1,3 +1,6 @@
+from datetime import datetime
+import pytz
+import os
 from fastapi import APIRouter, Response
 from fastapi.responses import HTMLResponse # Added for HTML responses
 from services.briefing_market_index import get_market_summary_markdown, get_sp500_map_image 
@@ -130,15 +133,36 @@ def report_insider_trades():
     }
 
 # Final. Endpoint to return HTML email body
-@router.post("/daily-briefing", response_class=HTMLResponse)
-def get_daily_briefing_html():
+@router.post("/daily-briefing")
+def get_daily_briefing():
     """
-    Final. Generates and returns the compiled Daily Briefing email in HTML format.
+    Final. Generates and returns the compiled Daily Briefing email subject and HTML body.
     """
     try:
         html_content = generate_email_report()
-        # Return raw HTML string instead of a JSON dictionary
-        return HTMLResponse(content=html_content)
+        
+        # [Added] Dynamically generate the email subject based on language
+        lang_code = os.getenv("REPORT_LANGUAGE", "en").lower()
+        kst_tz = pytz.timezone('Asia/Seoul')
+        now_kst = datetime.now(kst_tz)
+        
+        if lang_code == 'ko':
+            date_str = now_kst.strftime("%m월 %d일")
+            subject = f"[FinSight] 🇺🇸 {date_str} 미국 증시 데일리 브리핑"
+        else:
+            date_str = now_kst.strftime("%b %d")
+            subject = f"[FinSight] 🇺🇸 {date_str} Daily Market Briefing"
+
+        # Return both Subject and HTML as a JSON object
+        return {
+            "status": "success",
+            "subject": subject,
+            "html": html_content
+        }
+        
     except Exception as e:
         print(f"❌ Server Error: {e}")
-        return HTMLResponse(content=f"<h1>Server Error</h1><p>{str(e)}</p>", status_code=500)
+        return {
+            "status": "error",
+            "message": str(e)
+        }

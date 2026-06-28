@@ -1,3 +1,5 @@
+# backend/services/whale_tracker.py
+
 import sqlite3
 import requests
 import pandas as pd
@@ -225,7 +227,7 @@ def get_whale_tracker_data():
     stocks = [item for item in whale_alerts if item['sector'] != 'ETF']
     etfs = [item for item in whale_alerts if item['sector'] == 'ETF']
     
-    log(f"\n✅ Analysis complete. Reporting Whales: {len(whale_alerts)} (Stocks: {len(stocks)}, ETFs: {len(etfs)}, Active alerts: {len(normal_alerts)}).")
+    log(f"\n✅ Analysis complete. Reporting Whales: {len(whale_alerts)} (Stocks: {len(stocks)}, ETFs: {len(etfs)}), Active alerts: {len(normal_alerts)}.")
     
     return {
         "stocks": stocks,
