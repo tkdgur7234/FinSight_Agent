@@ -1,72 +1,85 @@
-# FinSight_Agent
-주식 시장 종합 분석 리포팅 시스템
+# 📈 FinSight_Agent
+> 미국 주식 시장 데이터 수집, 고래 거래 추적 및 데일리 브리핑 자동화를 위한 인텔리전스 에이전트
 
-기능
-1. 각종 지표, 경제 뉴스 기반 데일리 시황 리포트
-   1-1. Index (25-12-08)
-   s&p, nasdaq, russel, bitcoin, ... 등의 일간 변동값
-   1-2. S&P 500 Map (25-12-08)
-   apiflash 사이트를 통해 s&p 500 map 캡쳐해서 불러오기
-   1-3. Released main economy_indicators (25-12-21)
-   소비자물가지수(CPI), 생산자물가지수(PPI), 개인소비지출(PCE), 비농업고용지수(NFP), 신규실업수당청구, 소매판매, 기준금리(FOMC)와 같은
-   전일 발표되는 주요 지표를 fred api와 forex factory 크롤링을 통해 포스팅
-   1-4. Most Imapct Market News (25-12-31)
-   전날 시장에 영향을 끼친 주요 뉴스들을 수집 및 제시
-   LLM을 통해 핵심 재료를 요약해서 제시
-   - Google News RSS 이용해 크롤링 하되 세 단계 전략(현상, 원인, 주도주)으로 나눠서 수집
-   - 수집된 기사들 중 중복을 고려해 URL 기준 중복 제거
-   - RSS의 title + description만 LLM에 넘겨줘서 토큰 절약
+## ✨ Features
+* **시장 및 거시 경제 지표 모니터링**: FRED API 등을 활용한 주요 경제 지표 자동 추적
+* **이상 거래 탐지 (Whale & Insider)**: 고래(대규모 자본) 및 기업 내부자의 거래 내역을 데이터베이스(`whale_tracker.db`)에 축적하고 유의미한 변동성 모니터링
+* **뉴스 및 커뮤니티 감성 분석 (Sentiment Analysis)**: 주식 시장 뉴스와 커뮤니티(레딧)를 크롤링하고 LLM을 활용하여 시장 심리를 분석
+* **맞춤형 데일리 브리핑**: 수집된 데이터를 바탕으로 HTML 템플릿 기반의 리포트를 자동 생성하여 슬랙 및 이메일로 발송
 
-2. 관심 종목 집중 모니터링
-   2-1. 관심 종목 커뮤니티 감성 분석 (25-01-08)
-   레딧을 크롤링하고 ai 활용해 유저들의 종목별 공포 탐욕 지수 확인, 의미있는 게시물만 요약 후 제공
-   - 레딧(미국 주식)과 네이버 종토방(한국 주식)을 관심 종목 게시물 50~100개 크롤링
-   - JSON DB로 평균 글 리젠 속도를 통한 악재/호재 분석
-   - 1차 필터링 : 크롤링 시 인기순 정렬, 글자수/키워드 필터링
-   - 2차 필터링 : 핵심 의견 10개로 요약
-   - 최종 분석 : 요약된 의견 바탕으로 공포/탐욕 지수 산정 및 원인 분석
-   2-2. 관심 종목 뉴스 (25-01-09)
-   - 중복 뉴스 방지를 위한 difflib 라이브러리 사용 (유사도 50% 이상이면 버림)
-   RSS에서 5개 기사를 가져오고 중복 걸러내고 남은 최상위 2개만 선택
-   - 정밀 시간 필터링 (한국 시간으로 어제 09시 ~ 오늘 09시까지)
-   - 유료 뉴스 필터링
+## 🛠 Tech Stack
+* **Backend**: Python, FastAPI
+* **Data Gathering & Analysis**: BeautifulSoup (Crawling), LLM (Sentiment Analysis)
+* **Database**: SQLite
+* **Automation & CI/CD**: n8n, Docker, Docker Compose
 
-3. 이상 거래 감지
-   3-1. 대규모 거래 감지 (26-01-26)
-   각 종목(snp500, nasdaq, nyse)당 대규모 거래 발생 종목의 주간/월간의 빈도수 + Z-score 리포팅
-   - 1차 필터링 : Rel Volume(Finviz 자체 대규모 체결 감지 방식) > 1.5인 상위 60개씩 종목 크롤링
-   - 2차 필터링 : 그 중 Z-score > 2인 종목을 '대규모 거래'로 판단
-   - Z-score = yfinance로 해당 종목의 작년~현재 일봉 데이터를 가져와 통계적 이상치(Z-score)를 계산
-   3-2. 주요 종목 내부자 거래 감시 (26-02-08)
-   S&P, Nasdaq, NYSE 등 주요 기업 임원들의 미공개 정보 기반 거래 패턴 분석
-   - 데이터 크롤링 : OpenInsider에서 최신순 5000건 수집, python에서 최근 한달만 남김(cutoff)
-   - 1차 필터링(자격 심사) : 동전주($3.0 미만) 방지, 의미있는 거래(매수 $20k, 매도 $400k 이상)
-   - 2차 필터링(정밀 검증) : 재무 건전성 필터링 (시총 3500억 이상, 일 거래대금 30억 이상)
-   - 리포팅 : 집단 매수(최근 30일 내 3명 이상 매수), 주요 매수($100k 이상 매수, 직급이 C-Level), 대량 매도(300k 이상) 나눠서 포스팅
+## 🏗 Architecture Diagram
+<img src="./docs/diagram.png" width="800" alt="Architecture Diagram">
 
-4. 공시 기반 리스크 모니터링 기능
+## 📂 Project Structure
+```text
+FinSight_Agent/
+├── backend/
+│   ├── main.py                 # FastAPI 애플리케이션 진입점
+│   ├── services/               # 비즈니스 로직 (whale_tracker, insider_tracker 등)
+│   ├── templates/              # report_template.html (브리핑 리포트 템플릿)
+│   ├── whale_tracker.db        # 로컬 데이터베이스
+│   └── docker-compose.yml      # 도커 컨테이너 설정 파일
+├── docs/                       # 개발 일지 및 다이어그램 이미지
+└── n8n_daily_briefing.json     # 자동화 워크플로우 설정 파일
+```
 
-5. 주간 핫한 테마, 종목 요약 브리핑 시스템 (토요일만 보고)
+## 🚀 Installation
+**1. 저장소 클론**
+```bash
+git clone [https://github.com/tkdgur7234/finsight_agent.git](https://github.com/tkdgur7234/finsight_agent.git)
+cd finsight_agent/backend 
+```
+**2. 환경 변수 설정** (.env.example 참고)
+```bash
+cp .env.example .env # .env 파일에 FRED_API_KEY, SLACK_WEBHOOK_URL 등을 입력하세요.
+```
+**3. Docker 통해 백엔드 실행**
+```bash
+docker-compose up -d --build
+```
+**4. 서버 실행**
+```bash
+uvicorn main:app --reload --host 0.0.0
+```
 
-----------------------------------------------
-수정 (25-12-21)
-기존에는 n8n으로 모두 작업.
-         ↓
-시스템의 유연성과 확장성을 위해,
-데이터 분석 및 리포트 렌더링 로직은 서버를 구축해(FastAPI) 마이크로서비스화 하였으며, 
-워크플로우 제어는 n8n을 사용하여 로직과 오케스트레이션을 분리.
+## ⚙ Usage
+* **API 문서 확인**: 백엔드 서버 실행 후 `http://localhost:8000/docs`에 접속하여 FastAPI Swagger UI를 통해 각 엔드포인트를 테스트할 수 있습니다.
+* **n8n 연동**: 제공된 n8n_daily_briefing.json 워크플로우를 n8n 환경에 임포트하여 데일리 브리핑 스케줄링을 활성화합니다.
 
-my-stock-portfolio/
-├── backend/               # Python 서버 (FastAPI)
-│   ├── main.py            # 메인 서버 코드
-│   ├── routers/
-│   ├── services/          # 각종 기능 구현 코드
-│   ├── templates/         # 웹 시각화 html
-│   ├── requirements.txt   # 라이브러리 목록
-│   └── .venv/             # 가상 환경
-└── n8n/                   # n8n 관련 파일 (Docker 등)
+## 📊 Results
+
+
+## 💡 Trouble Shooting
+  
+* **API 병목 현상 개선 및 크롤링 로직 최적화 (멀티스레딩 도입)**
+  * **Issue**: 주요 종목의 내부자 거래 모니터링 로직에서 두 가지 문제가 발생했습니다. 첫째, 웹사이트 크롤링 기준을 너무 타이트하게 설정하여 사이트 내에서 데이터가 엉키는 현상이 발생했습니다. 둘째, 필터링된 티커(약 300건)를 `yfinance` 서버와 순차적으로 통신하여 주가 데이터를 가져오다 보니 약 3분 이상의 심각한 성능 병목(Bottleneck)이 발생했습니다.
+  * **Solution**: 이를 해결하기 위해 데이터 수집과 처리 방식을 전면 개편했습니다.
+    1. **필터링 로직 분리**: 사이트의 검색 기준에 의존하지 않고, 느슨한 기준으로 5,000개의 데이터를 1차 수집한 뒤 파이썬 내부 로직에서 엄격하게(최근 1달 치) 2차 필터링을 수행하여 데이터의 정합성을 확보했습니다.
+    2. **멀티스레딩 적용**: 외부 API 통신 시 발생하는 I/O 대기 시간을 줄이기 위해 `ThreadPoolExecutor`를 활용한 멀티스레딩 환경을 구축했습니다.
+  * **Result**: 결과적으로 데이터를 안전하게 수집함과 동시에, **기존 3분이 소요되던 작업 시간을 약 15초로 단축(약 90% 성능 향상)** 시키는 극적인 최적화를 이루어냈습니다.
+<img src="./docs/multithreading.png" width="800" alt="TroubleShooting">
+
+* **데이터 소스 의존성 문제 해결 (FMP API → Finviz 크롤링)**
+  * **Issue**: '이상 거래 감지' 기능 구현 당시, 초기 데이터 파이프라인 구축 시 `Financial Modeling Prep(FMP) API`를 사용했으나, 해당 서비스의 갑작스러운 정책 변경으로 인해 데이터 수집이 중단되는 문제가 발생했습니다.
+  * **Solution**: 외부 API 의존도를 낮추고 서비스 안정성을 확보하기 위해, `Finviz` 웹사이트의 데이터를 자체적으로 크롤링(BeautifulSoup 활용)하여 파싱하는 방식으로 로직을 전면 수정하여 데이터 수집 파이프라인을 정상 복구했습니다.
+
+
+## 📈 Future Improvements
+
+* **시장 변동성 모니터링 고도화**: 공매도 잔고(Short Interest) 및 숏 스퀴즈 발생 가능성 모니터링 기능 추가
+* **개인화 및 수익화 모델**: 사용자별 관심 종목(Watchlist)에 맞게 맞춤형 데이터를 필터링하여 리포팅하는 기능 도입
+* **이메일 발송 시스템 안정화**: 현재 구글 앱 비밀번호를 활용한 SMTP 방식에서, 향후 SendGrid나 Mailgun 등의 전문 이메일 서비스 계정을 연동하여 n8n 노드 교체 및 전송 안정성 확보
+* **리포트 UI/UX 개선**: 현재 모바일 뷰에 맞춰진 이메일 본문 리포팅 방식을 웹 환경에서도 쾌적하게 볼 수 있도록, 노션이나 별도 웹 링크 형태로 제공하는 브리핑 포맷으로 교체 고려
 
 
 <img width="633" height="903" alt="image" src="https://github.com/user-attachments/assets/1fbfddba-7815-4450-9f2a-4b9c51319921" />
 <img width="639" height="829" alt="image" src="https://github.com/user-attachments/assets/9ba404bc-0b10-4627-8b97-f3e2e3767078" />
 
+
+''' 이미지 채워넣기, 기술스택 아이콘으로 바꾸기, 영어 모드 추가해서 디폴트로'''
