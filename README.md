@@ -63,7 +63,7 @@ uvicorn main:app --reload --host 0.0.0
     1. **필터링 로직 분리**: 사이트의 검색 기준에 의존하지 않고, 느슨한 기준으로 5,000개의 데이터를 1차 수집한 뒤 파이썬 내부 로직에서 엄격하게(최근 1달 치) 2차 필터링을 수행하여 데이터의 정합성을 확보했습니다.
     2. **멀티스레딩 적용**: 외부 API 통신 시 발생하는 I/O 대기 시간을 줄이기 위해 `ThreadPoolExecutor`를 활용한 멀티스레딩 환경을 구축했습니다.
   * **Result**: 결과적으로 데이터를 안전하게 수집함과 동시에, **기존 3분이 소요되던 작업 시간을 약 15초로 단축(약 90% 성능 향상)** 시키는 극적인 최적화를 이루어냈습니다.
-<img src="./docs/multithreading.png" width="800" alt="TroubleShooting">
+   <img src="./docs/multithreading.png" width="800" alt="TroubleShooting">
 
 * **데이터 소스 의존성 문제 해결 (FMP API → Finviz 크롤링)**
   * **Issue**: '이상 거래 감지' 기능 구현 당시, 초기 데이터 파이프라인 구축 시 `Financial Modeling Prep(FMP) API`를 사용했으나, 해당 서비스의 갑작스러운 정책 변경으로 인해 데이터 수집이 중단되는 문제가 발생했습니다.

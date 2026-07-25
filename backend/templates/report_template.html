@@ -153,7 +153,16 @@
                                 <span style="display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; color: white; background-color: #34495e;">{{ whale['ticker'] }}</span>
                             </a>
                         </td>
-                        <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; font-size: 12px; font-weight: bold; color: #8e44ad;">{{ whale['size'] }}</td>
+                        
+                        <!-- [수정됨] 규모(Size) 란: ETF면 전용 뱃지, 주식이면 기존 사이즈 텍스트 출력 -->
+                        <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; font-size: 12px; font-weight: bold;">
+                            {% if whale['sector'] == 'ETF' %}
+                                <span style="display: inline-block; padding: 3px 6px; border-radius: 4px; background-color: #f39c12; color: white;">ETF</span>
+                            {% else %}
+                                <span style="color: #8e44ad;">{{ whale['size'] }}</span>
+                            {% endif %}
+                        </td>
+                        
                         <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; color: #666; font-size: 13px;">{{ whale['sector'] }}</td>
                         <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; color: #c0392b; font-weight: bold;">{{ whale['z_score'] }}</td>
                         <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; font-size: 13px;">{{ whale['weekly_freq'] }} / {{ whale['monthly_freq'] }}</td>
@@ -184,7 +193,16 @@
                                 <span style="display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; color: white; background-color: #3e4766;">{{ item['ticker'] }}</span>
                             </a>
                         </td>
-                        <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; font-size: 12px; font-weight: bold; color: #8e44ad;">{{ item['size'] }}</td>
+                        
+                        <!-- [수정됨] 규모(Size) 란: ETF면 전용 뱃지, 주식이면 기존 사이즈 텍스트 출력 -->
+                        <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; font-size: 12px; font-weight: bold;">
+                            {% if item['sector'] == 'ETF' %}
+                                <span style="display: inline-block; padding: 3px 6px; border-radius: 4px; background-color: #f39c12; color: white;">ETF</span>
+                            {% else %}
+                                <span style="color: #8e44ad;">{{ item['size'] }}</span>
+                            {% endif %}
+                        </td>
+                        
                         <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; color: #666; font-size: 13px;">{{ item['sector'] }}</td>
                         <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; color: #a74d4d; font-weight: bold;">{{ item['z_score'] }}</td>
                         <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; font-size: 13px; color: #27ae60;">{{ t.ano_active_status }}</td>
@@ -242,8 +260,8 @@
                     <th style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; background-color: #f8f9fa; font-weight: bold; color: #2c3e50;">{{ t.tbl_insider }}</th>
                     <th style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; background-color: #f8f9fa; font-weight: bold; color: #2c3e50;">{{ t.tbl_amount }}</th>
                 </tr>
-                {% if insider_trades['significant_buys'] %}
-                    {% for trade in insider_trades['significant_buys'] %}
+                {% if insider_trades['major_buys'] %}
+                    {% for trade in insider_trades['major_buys'] %}
                     <tr>
                         <td style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center;">
                             <a href="https://finviz.com/quote.ashx?t={{ trade['ticker'] }}" target="_blank" style="text-decoration: none;">
@@ -265,7 +283,7 @@
                 <tr>
                     <th style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; background-color: #f8f9fa; font-weight: bold; color: #2c3e50;">{{ t.tbl_ticker }}</th>
                     <th style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; background-color: #f8f9fa; font-weight: bold; color: #2c3e50;">{{ t.tbl_industry }}</th>
-                    <th style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; background-color: #f8f9fa; font-weight: bold; color: #2c3e50;">{{ t.tbl_insider }}</th>
+                    <th style="padding: 10px; border-bottom: 1px solid #ddd; text, align: center; background-color: #f8f9fa; font-weight: bold; color: #2c3e50;">{{ t.tbl_insider }}</th>
                     <th style="padding: 10px; border-bottom: 1px solid #ddd; text-align: center; background-color: #f8f9fa; font-weight: bold; color: #2c3e50;">{{ t.tbl_amount }}</th>
                 </tr>
                 {% if insider_trades['significant_sells'] %}
