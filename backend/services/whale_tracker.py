@@ -106,6 +106,9 @@ def calculate_metrics(ticker, today_vol):
         mean_vol_1y = past_data['Volume'].mean()
         std_vol_1y = past_data['Volume'].std()
         
+        if mean_vol_1y < 50000:
+            return None
+        
         # [수정됨] 표준편차가 0보다 클 때만 정상 계산하고, 아니면 데이터 오류로 간주하여 과감히 버림(None)
         if std_vol_1y > 0:
             z_score = (today_vol - mean_vol_1y) / std_vol_1y
@@ -258,6 +261,9 @@ def get_whale_tracker_data():
                                 display_sector = raw_sector
                                 
                             company_size = categorize_market_cap(market_cap_str)
+
+                            if company_size in ["Nano", "Micro"]:
+                                continue
 
                             price = float(str(row.get('Price', 0)))
                             vol_str = str(row.get('Volume', '0'))
