@@ -4,6 +4,42 @@
 🌍 **[Read in English](./README.md)**
 
 ## ✨ Features
+
+<table>
+<tr>
+<td width="33%">
+
+### 📊 시장 분석
+
+- 글로벌 지수
+- 주요 경제지표
+- AI 뉴스 요약
+- S&P500 히트맵
+
+</td>
+
+<td width="33%">
+
+### 🎯 관심 종목 분석
+
+- 커뮤니티 투자 심리
+- 종목 관련 뉴스
+- 핵심 의견 요약
+
+</td>
+
+<td width="33%">
+
+### 🚨 이상 거래 탐지
+
+- 대규모 거래 감지
+- 내부자 거래 분석
+- AI 리포트 생성
+
+</td>
+</tr>
+</table>
+
 * **시장 및 거시 경제 지표 모니터링**: FRED API 등을 활용한 주요 경제 지표 자동 추적
 * **이상 거래 탐지 (Whale & Insider)**: 고래(대규모 자본) 및 기업 내부자의 거래 내역을 데이터베이스(`whale_tracker.db`)에 축적하고 유의미한 변동성 모니터링
 * **뉴스 및 커뮤니티 감성 분석 (Sentiment Analysis)**: 주식 시장 뉴스와 커뮤니티(레딧)를 크롤링하고 LLM을 활용하여 시장 심리를 분석
@@ -61,6 +97,96 @@ uvicorn main:app --reload --host 0.0.0
 ## ⚙ Usage
 * **API 문서 확인**: 백엔드 서버 실행 후 `http://localhost:8000/docs`에 접속하여 FastAPI Swagger UI를 통해 각 엔드포인트를 테스트할 수 있습니다.
 * **n8n 연동**: 제공된 `n8n_daily_briefing.json` 워크플로우를 n8n 환경에 임포트하여 데일리 브리핑 스케줄링을 활성화합니다.
+
+
+## 🏆 Key Achievements
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+### 🚀 Performance
+
+⚡ **90% Faster**
+
+Data Collection
+
+**3 min → 15 sec**
+
+</td>
+
+<td width="33%" valign="top">
+
+### 🤖 Autonomous Agent
+
+시장 데이터를
+
+**수집 → 분석 → 리포트 → 이메일**
+
+까지 자동 수행
+
+</td>
+
+<td width="33%" valign="top">
+
+### 🧠 AI Intelligence
+
+LLM을 활용해
+
+뉴스 요약
+
+투자 심리 분석
+
+시장 해석 제공
+
+</td>
+</tr>
+<tr>
+
+<td width="33%" valign="top">
+
+### 📊 Quant Analysis
+
+Z-score 기반
+
+이상 거래 탐지
+
+내부자 거래 분석
+
+</td>
+
+<td width="33%" valign="top">
+
+### 🌎 Multi-source
+
+경제지표
+
+뉴스
+
+커뮤니티
+
+시장 데이터
+
+통합 분석
+
+</td>
+
+<td width="33%" valign="top">
+
+### 💡 Efficient Pipeline
+
+중복 제거
+
+시간 필터링
+
+토큰 최적화
+
+고품질 데이터만 분석
+
+</td>
+</tr>
+</table>
+
 
 ## 📊 Results
 

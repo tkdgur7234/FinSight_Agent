@@ -4,6 +4,42 @@
 🌍 **[Read in Korean](./README_ko.md)**
 
 ## ✨ Features
+<table>
+<tr>
+<td width="33%">
+
+### 📊 Market Intelligence
+
+- Global Index
+- Economic Indicators
+- AI News Summary
+- S&P500 Heatmap
+
+</td>
+
+<td width="33%">
+
+### 🎯 Watchlist
+
+- Community Sentiment
+- Stock News
+- Opinion Summary
+
+</td>
+
+<td width="33%">
+
+### 🚨 Smart Detection
+
+- Unusual Volume
+- Insider Trading
+- AI Reporting
+
+</td>
+</tr>
+</table>
+
+
 * **Market & Macroeconomic Indicator Monitoring**: Automatic tracking of key economic indicators using the FRED API and other sources.
 * **Anomaly Trade Detection (Whale & Insider)**: Accumulates whale (large capital) and corporate insider transaction details in a database (`whale_tracker.db`) and monitors significant volatility.
 * **News & Community Sentiment Analysis**: Crawls stock market news and communities (Reddit) and analyzes market sentiment using LLM.
@@ -62,6 +98,98 @@ uvicorn main:app --reload --host 0.0.0
 * **Check API Documentation**: After running the backend server, access `http://localhost:8000/docs` to test each endpoint via the FastAPI Swagger UI.
 * **n8n Integration**: Import the provided `n8n_daily_briefing.json` workflow into your n8n environment to activate daily briefing scheduling.
 
+## 🏆 Key Achievements
+
+<table>
+<tr>
+
+<td width="33%" valign="top">
+
+### 🚀 Performance
+
+⚡ **90% Faster**
+
+Data Collection
+
+**3 min → 15 sec**
+
+</td>
+
+<td width="33%" valign="top">
+
+### 🤖 Autonomous Agent
+
+Automated Workflow
+
+**Collect → Analyze → Report → Email**
+
+End-to-End AI Pipeline
+
+</td>
+
+<td width="33%" valign="top">
+
+### 🧠 AI Intelligence
+
+LLM-powered
+
+News Summarization
+
+Market Sentiment Analysis
+
+Market Insight Generation
+
+</td>
+
+</tr>
+
+<tr>
+
+<td width="33%" valign="top">
+
+### 📊 Quantitative Analysis
+
+Z-score-based
+
+Unusual Volume Detection
+
+Insider Trading Analysis
+
+</td>
+
+<td width="33%" valign="top">
+
+### 🌎 Multi-source Intelligence
+
+Economic Indicators
+
+Market News
+
+Community Sentiment
+
+Market Data
+
+Integrated Analysis
+
+</td>
+
+<td width="33%" valign="top">
+
+### 💡 Efficient Pipeline
+
+Duplicate Removal
+
+Time-based Filtering
+
+LLM Token Optimization
+
+High-quality Data Processing
+
+</td>
+
+</tr>
+
+</table>
 
 ## 📊 Results
 
