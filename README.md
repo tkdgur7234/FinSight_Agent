@@ -198,7 +198,7 @@ High-quality Data Processing
 A daily report combining market indices, economic indicators, and AI-generated insights.
 
 <p align="center">
-  <img src="docs/images/daily-market-report.png" width="38%">
+  <img src="docs/images/daily-market-report.png" width="50%">
 </p>
 
 ---
@@ -208,8 +208,8 @@ A daily report combining market indices, economic indicators, and AI-generated i
 Tracks watchlist stocks using community sentiment and curated market news.
 
 <p align="center">
-  <img src="docs/images/heatmap.png" width="38%">
-  <img src="docs/images/watchlist.png" width="38%">
+  <img src="docs/images/heatmap.png" width="50%">
+  <img src="docs/images/watchlist.png" width="50">
 </p>
 
 ---
@@ -219,8 +219,8 @@ Tracks watchlist stocks using community sentiment and curated market news.
 Detects unusual trading activity and insider transactions using quantitative analysis.
 
 <p align="center">
-  <img src="docs/images/anomaly-detection.png" width="38%">
-  <img src="docs/images/insider-trading.png" width="38%">
+  <img src="docs/images/anomaly-detection.png" width="50%">
+  <img src="docs/images/insider-trading.png" width="50%">
 </p>
 
 
