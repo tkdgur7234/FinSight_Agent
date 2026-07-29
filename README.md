@@ -207,10 +207,25 @@ A daily report combining market indices, economic indicators, and AI-generated i
 
 Tracks watchlist stocks using community sentiment and curated market news.
 
-<p align="center">
-  <img src="docs/images/heatmap.png" width="48%">
-  <img src="docs/images/watchlist.png" width="48%">
-</p>
+<table>
+<tr>
+<td width="50%" align="center">
+
+<img src="docs/images/heatmap.png">
+
+**S&P 500 Heatmap**
+
+</td>
+
+<td width="50%" align="center">
+
+<img src="docs/images/watchlist.png">
+
+**Community Sentiment**
+
+</td>
+</tr>
+</table>
 
 ---
 
@@ -218,10 +233,25 @@ Tracks watchlist stocks using community sentiment and curated market news.
 
 Detects unusual trading activity and insider transactions using quantitative analysis.
 
-<p align="center">
-  <img src="docs/images/anomaly-detection.png" width="48%">
-  <img src="docs/images/insider-trading.png" width="48%">
-</p>
+<table>
+<tr>
+<td width="50%" align="center">
+
+<img src="docs/images/anomaly-detection.png">
+
+**Anomaly Detection**
+
+</td>
+
+<td width="50%" align="center">
+
+<img src="docs/images/insider-trading.png">
+
+**Insider Trading**
+
+</td>
+</tr>
+</table>
 
 
 ## 💡 Trouble Shooting
