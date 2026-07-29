@@ -204,8 +204,8 @@ Z-score 기반
 커뮤니티 투자 심리와 종목 뉴스를 기반으로 관심 종목을 심층 분석합니다.
 
 <p align="center">
-  <img src="docs/images/heatmap.png" width="50%">
-  <img src="docs/images/watchlist.png" width="50%">
+  <img src="docs/images/heatmap.png" width="48%">
+  <img src="docs/images/watchlist.png" width="48%">
 </p>
 
 ---
@@ -215,8 +215,8 @@ Z-score 기반
 통계 기반 이상 거래와 내부자 거래를 자동으로 탐지하여 제공합니다.
 
 <p align="center">
-  <img src="docs/images/anomaly-detection.png" width="50%">
-  <img src="docs/images/insider-trading.png" width="50%">
+  <img src="docs/images/anomaly-detection.png" width="48%">
+  <img src="docs/images/insider-trading.png" width="48%">
 </p>
 
 
