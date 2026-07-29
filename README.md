@@ -60,7 +60,7 @@
 <img src="https://img.shields.io/badge/FRED_API-005288?style=for-the-badge">
 
 ## 🏗 Architecture Diagram
-<img src="./docs/diagram.png" width="800" alt="Architecture Diagram">
+<img src="./docs/images/diagram.png" width="800" alt="Architecture Diagram">
 
 ## 📂 Project Structure
 ```text
@@ -193,6 +193,35 @@ High-quality Data Processing
 
 ## 📊 Results
 
+### 📈 Daily Market Briefing
+
+A daily report combining market indices, economic indicators, and AI-generated insights.
+
+<p align="center">
+  <img src="docs/images/daily-market-report.png" width="38%">
+</p>
+
+---
+
+### 🎯 Watchlist Monitoring
+
+Tracks watchlist stocks using community sentiment and curated market news.
+
+<p align="center">
+  <img src="docs/images/heatmap.png" width="38%">
+  <img src="docs/images/watchlist.png" width="38%">
+</p>
+
+---
+
+### 🚨 Smart Detection
+
+Detects unusual trading activity and insider transactions using quantitative analysis.
+
+<p align="center">
+  <img src="docs/images/anomaly-detection.png" width="38%">
+  <img src="docs/images/insider-trading.png" width="38%">
+</p>
 
 
 ## 💡 Trouble Shooting
@@ -203,7 +232,7 @@ High-quality Data Processing
     1. **Separation of Filtering Logic**: Instead of relying on the site's search criteria, 5,000 data points were initially collected using loose criteria, followed by strict secondary filtering (recent 1 month) within the Python logic to ensure data integrity.
     2. **Application of Multi-threading**: Built a multi-threaded environment using `ThreadPoolExecutor`to significantly reduce I/O wait times during external API communication.
   * **Result**: Safely collected data while dramatically reducing the execution time from **3 minutes to approximately 15 seconds (about 90% performance improvement).** 
-   <img src="./docs/multithreading.png" width="800" alt="TroubleShooting">
+   <img src="./docs/images/multithreading.png" width="800" alt="TroubleShooting">
 
 * **Data Source Dependency Resolution (FMP API → Finviz Crawling)**
   * **Issue**: During the initial construction of the data pipeline for 'Anomaly Trade Detection', the `Financial Modeling Prep(FMP) API` was utilized. However, a sudden policy change by the service halted data collection.
@@ -216,7 +245,3 @@ High-quality Data Processing
 * **Personalization & Monetization Model**: Introduce a feature to filter and report customized data tailored to users' individual Watchlists.
 * **Email Delivery System Stabilization**: Transition from the current Google App Password SMTP method to integrating professional email services like SendGrid or Mailgun, replacing the n8n node to secure transmission stability.
 * **Report UI/UX Improvement**: Consider replacing the current mobile-optimized email body reporting with a Notion or separate web link format for a more comfortable viewing experience in web environments.
-
-
-<img width="633" height="903" alt="image" src="https://github.com/user-attachments/assets/1fbfddba-7815-4450-9f2a-4b9c51319921" />
-<img width="639" height="829" alt="image" src="https://github.com/user-attachments/assets/9ba404bc-0b10-4627-8b97-f3e2e3767078" />

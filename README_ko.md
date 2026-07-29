@@ -60,7 +60,7 @@
 <img src="https://img.shields.io/badge/FRED_API-005288?style=for-the-badge">
 
 ## 🏗 Architecture Diagram
-<img src="./docs/diagram.png" width="800" alt="Architecture Diagram">
+<img src="./docs/images/diagram.png" width="800" alt="Architecture Diagram">
 
 ## 📂 Project Structure
 ```text
@@ -187,8 +187,37 @@ Z-score 기반
 </tr>
 </table>
 
-
 ## 📊 Results
+
+### 📈 Daily Market Briefing
+
+주요 지수, 경제지표, AI 뉴스 분석을 종합하여 일일 시장 리포트를 자동 생성합니다.
+
+<p align="center">
+  <img src="docs/images/daily-market-report.png" width="38%">
+</p>
+
+---
+
+### 🎯 Watchlist Monitoring
+
+커뮤니티 투자 심리와 종목 뉴스를 기반으로 관심 종목을 심층 분석합니다.
+
+<p align="center">
+  <img src="docs/images/heatmap.png" width="38%">
+  <img src="docs/images/watchlist.png" width="38%">
+</p>
+
+---
+
+### 🚨 Smart Detection
+
+통계 기반 이상 거래와 내부자 거래를 자동으로 탐지하여 제공합니다.
+
+<p align="center">
+  <img src="docs/images/anomaly-detection.png" width="38%">
+  <img src="docs/images/insider-trading.png" width="38%">
+</p>
 
 
 ## 💡 Trouble Shooting
@@ -199,7 +228,7 @@ Z-score 기반
     1. **필터링 로직 분리**: 사이트의 검색 기준에 의존하지 않고, 느슨한 기준으로 5,000개의 데이터를 1차 수집한 뒤 파이썬 내부 로직에서 엄격하게(최근 1달 치) 2차 필터링을 수행하여 데이터의 정합성을 확보했습니다.
     2. **멀티스레딩 적용**: 외부 API 통신 시 발생하는 I/O 대기 시간을 줄이기 위해 `ThreadPoolExecutor`를 활용한 멀티스레딩 환경을 구축했습니다.
   * **Result**: 결과적으로 데이터를 안전하게 수집함과 동시에, **기존 3분이 소요되던 작업 시간을 약 15초로 단축(약 90% 성능 향상)** 시키는 극적인 최적화를 이루어냈습니다.
-   <img src="./docs/multithreading.png" width="800" alt="TroubleShooting">
+   <img src="./docs/images/multithreading.png" width="800" alt="TroubleShooting">
 
 * **데이터 소스 의존성 문제 해결 (FMP API → Finviz 크롤링)**
   * **Issue**: '이상 거래 감지' 기능 구현 당시, 초기 데이터 파이프라인 구축 시 `Financial Modeling Prep(FMP) API`를 사용했으나, 해당 서비스의 갑작스러운 정책 변경으로 인해 데이터 수집이 중단되는 문제가 발생했습니다.
@@ -212,10 +241,3 @@ Z-score 기반
 * **개인화 및 수익화 모델**: 사용자별 관심 종목(Watchlist)에 맞게 맞춤형 데이터를 필터링하여 리포팅하는 기능 도입
 * **이메일 발송 시스템 안정화**: 현재 구글 앱 비밀번호를 활용한 SMTP 방식에서, 향후 SendGrid나 Mailgun 등의 전문 이메일 서비스 계정을 연동하여 n8n 노드 교체 및 전송 안정성 확보
 * **리포트 UI/UX 개선**: 현재 모바일 뷰에 맞춰진 이메일 본문 리포팅 방식을 웹 환경에서도 쾌적하게 볼 수 있도록, 노션이나 별도 웹 링크 형태로 제공하는 브리핑 포맷으로 교체 고려
-
-
-<img width="633" height="903" alt="image" src="https://github.com/user-attachments/assets/1fbfddba-7815-4450-9f2a-4b9c51319921" />
-<img width="639" height="829" alt="image" src="https://github.com/user-attachments/assets/9ba404bc-0b10-4627-8b97-f3e2e3767078" />
-
-
-''' 이미지 채워넣기, 기술스택 아이콘으로 바꾸기, 영어 모드 추가해서 디폴트로'''
